@@ -20,36 +20,28 @@ const defaultOKFAgentsBlock = `<!-- BEGIN OKF AGENT MEMORY -->
 
 > Powered by [OKF Agent Memory](https://github.com/okf-memory/okf-agent-memory) — Open Knowledge Format (OKF) v0.2 persistent project memory for AI agents.
 
-When working in this codebase, you must follow the memory conventions:
+### 1. Behavioral Invariants & Constraints (RFC 2119)
+- MUST execute ` + "`okf_search(query=keywords, limit=3)`" + ` before proposing architecture, new dependencies, or substantial code changes.
+- NEVER scan ` + "`knowledge/`" + ` via ` + "`list_dir`" + `, ` + "`grep_search`" + `, ` + "`find`" + `, or raw file readers.
+- NEVER forge human verification (` + "`verified:`" + ` is human-only; declare ` + "`generated: { by: \"<actor>\", at: \"<iso-time>\" }`" + `).
+- PREFER native ` + "`okf_*`" + ` MCP tools OVER CLI fallback commands.
 
-1. **Persistent Knowledge Lives in ` + "`knowledge/`" + `**:
-   - The ` + "`knowledge/`" + ` directory is an **Open Knowledge Format (OKF) v0.2** bundle.
-   - Store durable facts, architectural decisions, and project findings in ` + "`knowledge/`" + `. Never store transient conversational noise.
+### 2. Guard Clauses & Scope Governance
+- ON edit(@path/):
+    IF first_visit(@path/) => okf_search(for_path=@path/)
+    IF governance == "hold" => STOP("Subsystem frozen by governance. Request explicit human confirmation.")
+    IF governance == "constraint" => MUST adhere to all listed invariants
+    IF governance == "context" => proceed with awareness
+- ON user_query(architecture | requirements | conventions | domain_facts):
+    okf_search(query=keywords, limit=3) => evaluate summary description
+    IF relevant => okf_show(concept_id) ONLY on demand
+    IF updating_existing_concept => PREFER okf_update OVER okf_create
 
-2. **Read Before Write (Search Before Create)**:
-   - Before authoring new knowledge or code, query existing memory: ` + "`okf search \"<query>\"`" + ` or inspect ` + "`knowledge/index.md`" + `.
-   - Update existing concepts instead of creating duplicates.
-
-3. **Strict Context & Search-First Retrieval (No Blanket Scans)**:
-   - **DO NOT** use ` + "`list_dir`" + `, ` + "`grep`" + `, or scan ` + "`knowledge/`" + ` in bulk.
-   - Query knowledge via ` + "`okf search \"<query>\" --limit 3 --json`" + ` only when relevant or requested.
-   - Inspect concept descriptions first and load full concepts only on demand using ` + "`okf show <id>`" + `.
-
-4. **Preserve Trust & Provenance**:
-   - Agent writes declare ` + "`generated: { by: \"<agent>\", at: \"<timestamp>\" }`" + `. Never forge human verification (` + "`verified:`" + `).
-
-5. **Essential Memory Commands**:
-   - ` + "`okf search \"<query>\"`" + ` — Query memory using in-memory BM25
-   - ` + "`okf show <id>`" + ` — Inspect concept details and relationship graph
-   - ` + "`okf create <id> --type <type> --title \"<title>\" --desc \"<desc>\"`" + ` — Document new fact
-   - ` + "`okf update <id> --desc \"<updated-desc>\"`" + ` — Modify existing concept
-   - ` + "`okf relate <src> <tgt> --desc \"<rel>\"`" + ` — Link concepts together
-   - ` + "`okf validate knowledge --strict --drift`" + ` — Verify 100% OKF v0.2 conformance
-
-6. **End-of-Task Review Checklist**:
-   - Did I make an architectural decision? -> Record under ` + "`knowledge/architecture/`" + `
-   - Did I add/update concepts? -> Ensure ` + "`knowledge/log.md`" + ` and parent ` + "`index.md`" + ` are updated.
-   - Did I validate? -> Ensure 0 errors, 0 broken links (` + "`okf validate knowledge --strict`" + `).
+### 3. Completion Pipeline (Sequential Assertion Gates)
+1. IF arch_decisions_made => MUST okf_create(architecture/*, type="decision", title=..., desc=...)
+2. IF requirements_discovered => MUST okf_update(concept_id)
+3. IF concepts_mutated => MUST sync(knowledge/log.md, knowledge/index.md)
+4. ASSERT(okf_validate(strict=true, drift=true) == {errors: 0, warnings: 0}, ELSE=fix_before_exit)
 <!-- END OKF AGENT MEMORY -->
 `
 

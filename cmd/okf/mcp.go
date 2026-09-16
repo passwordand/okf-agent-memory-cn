@@ -226,7 +226,7 @@ func getMCPTools() []map[string]any {
 	return []map[string]any{
 		{
 			"name":        "okf_search",
-			"description": "Search the OKF knowledge bundle for concepts by query terms, tags, and titles using in-memory BM25 scoring.",
+			"description": "Search the OKF knowledge bundle for concepts by query terms, tags, and titles using in-memory BM25 scoring, or by file path via code_refs.",
 			"inputSchema": map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -234,13 +234,38 @@ func getMCPTools() []map[string]any {
 						"type":        "string",
 						"description": "Search terms to find matching concepts.",
 					},
+					"for_path": map[string]any{
+						"type":        "string",
+						"description": "Optional file or directory path to find governing concepts via code_refs (e.g. 'pkg/okf/types.go').",
+					},
 					"limit": map[string]any{
 						"type":        "integer",
 						"description": "Maximum number of results (default 10).",
 					},
 					"bundle": bundleProp,
 				},
-				"required": []string{"query"},
+				"required": []string{},
+			},
+			"outputSchema": map[string]any{
+				"type":        "array",
+				"description": "Ranked matches (JSON array of search-result objects).",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"concept_id":  map[string]any{"type": "string"},
+						"title":       map[string]any{"type": "string"},
+						"type":        map[string]any{"type": "string"},
+						"description": map[string]any{"type": "string"},
+						"governance":  map[string]any{"type": "string", "description": "Agent authority level: constraint | hold | context."},
+						"code_refs":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Source paths or globs this concept governs."},
+						"score":       map[string]any{"type": "number"},
+						"matched_on":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+						"tags":        map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+						"inbound":     map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+						"outbound":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+					},
+					"required": []string{"concept_id", "title", "type", "description", "score", "matched_on"},
+				},
 			},
 		},
 		{
@@ -256,6 +281,24 @@ func getMCPTools() []map[string]any {
 					"bundle": bundleProp,
 				},
 				"required": []string{"concept_id"},
+			},
+			"outputSchema": map[string]any{
+				"type":        "object",
+				"description": "The concept record (frontmatter fields plus body).",
+				"properties": map[string]any{
+					"id":          map[string]any{"type": "string"},
+					"path":        map[string]any{"type": "string"},
+					"type":        map[string]any{"type": "string"},
+					"title":       map[string]any{"type": "string"},
+					"description": map[string]any{"type": "string"},
+					"tags":        map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+					"status":      map[string]any{"type": "string"},
+					"stale_after": map[string]any{"type": "string"},
+					"body":        map[string]any{"type": "string", "description": "Markdown body after frontmatter."},
+					"governance":  map[string]any{"type": "string", "description": "Agent authority level: constraint | hold | context."},
+					"code_refs":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Source paths or globs this concept governs."},
+				},
+				"required": []string{"id", "path", "type"},
 			},
 		},
 		{
@@ -275,6 +318,31 @@ func getMCPTools() []map[string]any {
 					"bundle": bundleProp,
 				},
 				"required": []string{},
+			},
+			"outputSchema": map[string]any{
+				"type":        "object",
+				"description": "Validation report for the bundle.",
+				"properties": map[string]any{
+					"bundle_path":      map[string]any{"type": "string"},
+					"declared_version": map[string]any{"type": "string", "description": "OKF version declared by the bundle."},
+					"concept_count":    map[string]any{"type": "integer"},
+					"errors":           map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+					"warnings":         map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+					"gate_findings":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Diagnostics from governance/code_refs gates."},
+					"broken_links": map[string]any{"type": "array", "items": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"source_concept": map[string]any{"type": "string"},
+							"target_href":    map[string]any{"type": "string"},
+							"reason":         map[string]any{"type": "string"},
+						},
+					}, "description": "Graph integrity findings."},
+					"orphans":       map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+					"stale_count":   map[string]any{"type": "integer"},
+					"is_conformant": map[string]any{"type": "boolean"},
+					"gate_passed":   map[string]any{"type": "boolean"},
+				},
+				"required": []string{"bundle_path", "concept_count", "errors", "warnings", "is_conformant", "gate_passed"},
 			},
 		},
 		{
@@ -307,6 +375,10 @@ func getMCPTools() []map[string]any {
 				},
 				"required": []string{"concept_id", "type", "title", "description"},
 			},
+			"outputSchema": map[string]any{
+				"type":        "string",
+				"description": "Human-readable confirmation naming the created concept path.",
+			},
 		},
 		{
 			"name":        "okf_update",
@@ -334,6 +406,10 @@ func getMCPTools() []map[string]any {
 				},
 				"required": []string{"concept_id"},
 			},
+			"outputSchema": map[string]any{
+				"type":        "string",
+				"description": "Human-readable confirmation naming the updated concept path.",
+			},
 		},
 		{
 			"name":        "okf_relate",
@@ -357,6 +433,10 @@ func getMCPTools() []map[string]any {
 				},
 				"required": []string{"source_id", "target_id"},
 			},
+			"outputSchema": map[string]any{
+				"type":        "string",
+				"description": "Human-readable confirmation naming the linked concepts.",
+			},
 		},
 	}
 }
@@ -377,6 +457,8 @@ func (s *mcpServer) resolveBundleDir(callParams mcpToolCallParams) (string, erro
 		}
 	}
 
+	normTarget := filepath.ToSlash(target)
+
 	// Confinement check: if s.rootDir is configured, target must stay within s.rootDir
 	if s.rootDir != "" {
 		absRoot, err := filepath.EvalSymlinks(s.rootDir)
@@ -390,10 +472,10 @@ func (s *mcpServer) resolveBundleDir(callParams mcpToolCallParams) (string, erro
 		}
 
 		var absTarget string
-		if filepath.IsAbs(target) {
-			absTarget = target
+		if filepath.IsAbs(normTarget) {
+			absTarget = normTarget
 		} else {
-			absTarget = filepath.Join(s.rootDir, target)
+			absTarget = filepath.Join(s.rootDir, filepath.FromSlash(normTarget))
 		}
 
 		// Walk up to find the closest ancestor that exists and evaluate its symlinks
@@ -425,8 +507,9 @@ func (s *mcpServer) resolveBundleDir(callParams mcpToolCallParams) (string, erro
 		realTarget := filepath.Join(parts...)
 
 		rel, err := filepath.Rel(absRoot, realTarget)
-		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return "", fmt.Errorf("bundle directory %q escapes server root %q", target, s.rootDir)
+		normRel := filepath.ToSlash(rel)
+		if err != nil || rel == ".." || normRel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || strings.HasPrefix(normRel, "../") {
+			return "", fmt.Errorf("path traversal denied: bundle directory %q escapes server root %q", target, s.rootDir)
 		}
 
 		return realTarget, nil
@@ -461,11 +544,17 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 	switch callParams.Name {
 	case "okf_search":
 		query, _ := callParams.Arguments["query"].(string)
+		forPath, _ := callParams.Arguments["for_path"].(string)
 		limit := 10
 		if l, ok := callParams.Arguments["limit"].(float64); ok && l > 0 {
 			limit = int(l)
 		}
-		results := b.Search(query, limit)
+		var results []okf.SearchResult
+		if forPath != "" {
+			results = b.SearchForPath(forPath, query, limit)
+		} else {
+			results = b.Search(query, limit)
+		}
 		if results == nil {
 			results = []okf.SearchResult{}
 		}

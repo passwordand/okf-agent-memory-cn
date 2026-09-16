@@ -52,7 +52,14 @@ func ensureWithinRoot(rootDir, targetPath string) (string, error) {
 		return "", fmt.Errorf("failed to get absolute path of bundle root: %w", err)
 	}
 
-	absTarget, err := filepath.Abs(targetPath)
+	cleanTarget := strings.ReplaceAll(targetPath, "\\", "/")
+	if filepath.IsAbs(targetPath) {
+		cleanTarget = filepath.Clean(cleanTarget)
+	} else {
+		cleanTarget = path.Join(filepath.ToSlash(realRoot), cleanTarget)
+	}
+
+	absTarget, err := filepath.Abs(filepath.FromSlash(cleanTarget))
 	if err != nil {
 		return "", err
 	}
@@ -86,7 +93,8 @@ func ensureWithinRoot(rootDir, targetPath string) (string, error) {
 	realTarget := filepath.Join(parts...)
 
 	rel, err := filepath.Rel(realRoot, realTarget)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	relSlash := filepath.ToSlash(rel)
+	if err != nil || relSlash == ".." || strings.HasPrefix(relSlash, "../") {
 		return "", fmt.Errorf("path traversal denied: %q escapes bundle directory", targetPath)
 	}
 
@@ -110,6 +118,16 @@ func LoadBundle(root string) (*Bundle, error) {
 	}
 	if !info.IsDir() {
 		return nil, fmt.Errorf("path is not a directory: %s", root)
+	}
+
+	// If root itself does not contain index.md, but contains a knowledge/ subdirectory,
+	// resolve to the nested knowledge/ bundle directory (e.g. project root with DMAA layout).
+	rootIndex := filepath.Join(realRoot, "index.md")
+	if _, err := os.Stat(rootIndex); os.IsNotExist(err) {
+		kDir := filepath.Join(realRoot, "knowledge")
+		if kInfo, kErr := os.Stat(kDir); kErr == nil && kInfo.IsDir() {
+			root = filepath.Join(root, "knowledge")
+		}
 	}
 
 	b := &Bundle{
@@ -150,6 +168,11 @@ func LoadBundle(root string) (*Bundle, error) {
 			return err
 		}
 		rel = filepath.ToSlash(rel)
+
+		// Root AGENTS.md is the agent governance layer (DMAA L1), not an OKF concept
+		if strings.EqualFold(rel, "AGENTS.md") {
+			return nil
+		}
 
 		// Security: prevent symlink following outside bundle directory
 		if d.Type()&fs.ModeSymlink != 0 {

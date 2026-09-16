@@ -1,5 +1,37 @@
+## 2026-09-16
+* **Release**: Published version v0.3.1 — Dual-Memory Agent Architecture (DMAA) empirical benchmark suite (`okf-benchmark`), CLI subcommand help handlers (`okf <subcommand> --help`), pre-flight GPU warmup ping, automated Mermaid diagram sanitizer, AAG v0.1 skill refactoring, and mutation performance hardening.
+
+## 2026-09-15
+* **Release**: Published version v0.3.0 — Agent Action Grammar (AAG) RFC & AST Linter (`AAG-001`–`AAG-005`), Dual-Memory Agent Architecture (DMAA), Multi-Domain Codex Scaffolding (`okf agents init`), SSoT Tool Symlinks (`okf agents link`), `okf validate --agents`, and Google Jules security remediation.
+* **Update**: Updated `knowledge/roadmap/milestones.md` marking Phase 13 (DMAA & Agent Action Grammar) as completed.
+* **Update**: Linked `convention/dual-memory-architecture.md` to `architecture/layers.md` (Defines Layer 1 push working memory and Layer 2 pull domain memory).
+* **Update**: Linked `convention/dual-memory-architecture.md` to `convention/principles.md` (Specializes behavioral invariants into two cognitive memory layers).
+* **Creation**: Documented concept `convention/dual-memory-architecture.md` (Dual-Memory Agent Architecture & Agent Action Grammar).
+* **Documentation**: Reorganized `docs/` hierarchy into categorized subdirectories (`guides/`, `spec/`, `security/`, `project/`, `releases/`) and created central `docs/README.md` index. Added `docs/spec/DUAL_MEMORY_AGENT_ARCHITECTURE_RFC.md`, `docs/spec/AGENT_ACTION_GRAMMAR_RFC.md`, `docs/guides/AGENT_INSTRUCTION_BEST_PRACTICES.md`, and `docs/guides/LLM_INSTRUCTION_PATTERNS_CHEATSHEET.md`.
+
+## 2026-09-12
+* **Release**: Published version v0.2.0 — Epistemic Governance & Code-to-Knowledge Binding Release.
+* **Infrastructure**: Automated GitHub Actions release pipeline to ingest release notes from `docs/releases/${VERSION}.md` with fail-fast CI gate.
+* **Community**: Achieved 100% GitHub Community Health with Contributor Covenant v2.1 `CODE_OF_CONDUCT.md`, `CONTRIBUTORS.md` acknowledgements, interactive avatar grid, GitHub Sponsors configuration, and Dependabot automation.
+* **Update**: Updated `knowledge/roadmap/milestones.md` marking Phase 12 (Governance & Code Binding) as completed.
+
+## 2026-09-11
+* **Release**: Prepared major milestone Release v0.2.0 — Epistemic Governance & Code-to-Knowledge Binding Release integrating 3-tier authority model (constraint, hold, context), code_refs and scoped pre-edit discovery (--for-path in CLI and MCP), automated dogfooding parity test (TestDogfoodingAssetDrift), path traversal hardening (CWE-22), and community contributions from @krakozavr, @denis-samatov (#14-#17), and @dajiaohuang (#19).
+* **Update**: Updated concept `convention/coding-standards.md` establishing the embedded asset synchronization invariant (`make sync-assets` and automated CI drift gate `TestDogfoodingAssetDrift`).
+* **Update**: Linked `architecture/layers.md` to `architecture/governance-model.md` (Specifies the 3-tier epistemic governance model and code-to-knowledge binding).
+* **Update**: Linked `architecture/governance-model.md` to `architecture/tooling-decision.md` (Implemented in deterministic Go CLI and MCP server).
+* **Update**: Linked `architecture/governance-model.md` to `architecture/layers.md` (Defines Layer 2 governance policies and Layer 4 code binding).
+* **Creation**: Documented concept `architecture/governance-model.md` (Governance vs. Execution Context and Code Binding).
+* **Update**: Established Issue-First contribution policy and GitFlow branching strategy designating `develop` as default integration branch for PRs and reserving `main` strictly for tagged releases in `convention/contributing.md`, `CONTRIBUTING.md`, `.github/pull_request_template.md`, and `docs/RELEASE_PLAYBOOK.md`.
+
+## 2026-09-10
+* **Creation**: Documented concept `architecture/cli-argument-boundary.md` (CLI Optional Path Boundary).
+* **Creation**: Documented concept `architecture/metadata-roundtrip.md` (Safe Unknown Metadata Round-Trip).
+* **Creation**: Documented concept `architecture/relationship-identity.md` (Relationship Identity and Logging).
+* **Creation**: Documented concept `architecture/search-tokenization.md` (Unicode and Deterministic Search).
+
 ## 2026-09-09
-* **Release**: Prepared version v0.1.5 — Adversarial Security & DRY Hardening Release integrating autonomous Google Jules adversarial security loop, boundary symlink containment, central DRY metadata sanitization, actor whitespace fallback, self-relation loop prevention, and Jules workflow automation (`jules-review`, `jules-merge`).
+* **Release**: Published version v0.1.5 — Adversarial Security & DRY Hardening Release integrating autonomous Google Jules adversarial security loop, boundary symlink containment, central DRY metadata sanitization, actor whitespace fallback, self-relation loop prevention, and Jules workflow automation (`jules-review`, `jules-merge`).
 
 ## 2026-09-08
 * **Update**: Linked `architecture/layers.md` and `convention/contributing.md` to `convention/coding-standards.md`.

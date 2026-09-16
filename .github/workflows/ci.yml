@@ -14,10 +14,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: 'go.mod'
           cache: true
@@ -43,11 +43,11 @@ jobs:
       - name: Validate project knowledge bundle
         run: make validate
 
-      - name: Validate example bundles
+      - name: Validate example bundles and agent governance
         run: |
-          ./bin/okf validate examples/software --strict
-          ./bin/okf validate examples/coaching --strict
-          ./bin/okf validate examples/books --strict
+          ./bin/okf validate --agents --strict examples/software
+          ./bin/okf validate --agents --strict examples/coaching
+          ./bin/okf validate --agents --strict examples/books
 
       - name: Test bootstrap scaffolding
         run: |

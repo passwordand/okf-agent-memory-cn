@@ -14,4 +14,4 @@ We will acknowledge receipt within 48 hours and work with you to coordinate a fi
 
 ## Security & Data Governance Guidelines
 
-For our complete threat model, PII protection rules, secret prevention policies, and memory poisoning defenses, please consult our normative [Security, Privacy & Data Governance Guidelines](docs/SECURITY.md).
+For our complete threat model, PII protection rules, secret prevention policies, and memory poisoning defenses, please consult our normative [Security, Privacy & Data Governance Guidelines](docs/security/SECURITY.md).

@@ -1,6 +1,11 @@
 # OKF Agent Memory 中文检索改造版
 
-这是 OKF Agent Memory v0.1.5 的中文检索改造版。项目保留 OKF 的 Markdown 数据格式、CLI 和 MCP 接口，在搜索层集成 `go-ego/gse`，让中文和中英文混合查询可以正常分词和召回。
+这是 [OKF Agent Memory](https://github.com/okf-memory/okf-agent-memory) v0.3.1 的中文检索改造版。项目保留 OKF 的 Markdown 数据格式、CLI 和 MCP 接口，在搜索层集成 `go-ego/gse`，让中文和中英文混合查询可以正常分词和召回。
+
+## 源码
+
+- 上游源码：[okf-memory/okf-agent-memory](https://github.com/okf-memory/okf-agent-memory)
+- 本仓库：[passwordand/okf-agent-memory-cn](https://github.com/passwordand/okf-agent-memory-cn)
 
 ## 适用场景
 
@@ -11,6 +16,7 @@
 
 ## 主要改动
 
+- 基于上游 v0.3.1（含 v0.2.0 / v0.3.0 的治理、`code_refs`、AAG / DMAA 和 CLI 加固）；
 - 使用 gse 搜索模式处理中文分词；
 - 保留英文、数字和概念 ID 检索；
 - 分词器只初始化一次，避免每次查询重复加载词典；
@@ -56,6 +62,9 @@ cd okf-agent-memory-cn
 # 中文搜索
 ./dist/okf-cn.exe search "登录鉴权" knowledge
 
+# 按源码路径查找治理规则（上游 v0.2+）
+./dist/okf-cn.exe search --for-path pkg/okf/types.go knowledge
+
 # 查看概念
 ./dist/okf-cn.exe show architecture/layers knowledge --json
 
@@ -73,16 +82,16 @@ MCP 服务启动时指定要使用的 `knowledge` bundle。项目库和全局库
 ## 公开文档
 
 - [中文 README（简版）](README-cn.md)
-- [OKF CLI 文档](docs/CLI.md)
-- [OKF MCP / 接入说明](docs/GETTING_STARTED.md)
+- [OKF CLI 文档](docs/guides/CLI.md)
+- [OKF MCP / 接入说明](docs/guides/GETTING_STARTED.md)
+- [上游项目](https://github.com/okf-memory/okf-agent-memory)
 
 ## 验证状态
 
-已使用 Go 1.25.0 完成构建，并用中文混合语料验证 `登录`、`鉴权`、`知识库`、`Unity 动画帧` 等查询。`go test ./pkg/okf`、`go vet ./...` 和 OKF 严格校验通过；GitHub Actions CI 也已通过。
+已基于上游 v0.3.1 合入 gse 中文检索。`go test ./pkg/okf`、`go vet ./...` 和 OKF 严格校验应通过。中文混合语料覆盖 `登录`、`鉴权`、`知识库`、`JWT` 等查询。
 
 Windows 下官方 `cmd/okf` 的部分 MCP 安全测试仍有原有兼容性问题，与 gse 搜索改动无关。
 
 ## 许可证
 
 本项目沿用上游 OKF Agent Memory 的 MIT 许可证。
-

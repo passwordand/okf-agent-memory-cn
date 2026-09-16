@@ -18,13 +18,16 @@ jobs:
   release:
     name: Build & Publish Release
     runs-on: ubuntu-latest
+    env:
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      WEBSITE_UPDATE_TOKEN: ${{ secrets.WEBSITE_UPDATE_TOKEN }}
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: 'go.mod'
           cache: true
@@ -39,6 +42,24 @@ jobs:
           fi
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
           echo "CLEAN_VERSION=${VERSION#v}" >> $GITHUB_OUTPUT
+
+      - name: Verify & Resolve Release Notes (Fail-Fast Gate)
+        id: release_notes
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          NOTES_PATH="docs/releases/${VERSION}.md"
+          if [ -f "$NOTES_PATH" ]; then
+            echo "Found release notes at $NOTES_PATH"
+            echo "BODY_PATH=$NOTES_PATH" >> $GITHUB_OUTPUT
+          elif [ "$VERSION" = "dev" ] && [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Dev build without dedicated release notes."
+            mkdir -p dist
+            echo "Development build triggered via workflow dispatch." > dist/dev_notes.md
+            echo "BODY_PATH=dist/dev_notes.md" >> $GITHUB_OUTPUT
+          else
+            echo "::error::Release notes file '$NOTES_PATH' does not exist! Please create 'docs/releases/${VERSION}.md' before releasing."
+            exit 1
+          fi
 
       - name: Build Cross-Platform Binaries
         run: |
@@ -147,10 +168,10 @@ jobs:
           EOF
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.get_version.outputs.VERSION }}
-          name: OKF Agent Memory ${{ steps.get_version.outputs.VERSION }}
+          name: ${{ steps.get_version.outputs.VERSION }}
           draft: false
           prerelease: false
           files: |
@@ -159,13 +180,15 @@ jobs:
             dist/okf-starter-pack-${{ steps.get_version.outputs.VERSION }}.zip
             dist/checksums.txt
             dist/Formula/okf.rb
-          generate_release_notes: true
+          body_path: ${{ steps.release_notes.outputs.BODY_PATH }}
 
       - name: Auto-update Homebrew Tap
         if: env.HOMEBREW_TAP_TOKEN != ''
-        env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
+          if [ -z "${HOMEBREW_TAP_TOKEN:-}" ]; then
+            echo "HOMEBREW_TAP_TOKEN is not set, skipping Homebrew tap update."
+            exit 0
+          fi
           echo "Updating okf-memory/homebrew-tap with new Formula..."
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
@@ -181,3 +204,21 @@ jobs:
             git push origin main
             echo "Successfully updated okf-memory/homebrew-tap!"
           fi
+
+      - name: Auto-update Documentation Website
+        if: env.WEBSITE_UPDATE_TOKEN != ''
+        run: |
+          if [ -z "${WEBSITE_UPDATE_TOKEN:-}" ]; then
+            echo "WEBSITE_UPDATE_TOKEN is not set, skipping website update."
+            exit 0
+          fi
+          echo "Updating okf-memory/okf-memory.github.io documentation and install links..."
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git clone https://x-access-token:${WEBSITE_UPDATE_TOKEN}@github.com/okf-memory/okf-memory.github.io.git website-repo
+          cd website-repo
+          chmod +x scripts/bump-version.sh
+          ./scripts/bump-version.sh "${{ steps.get_version.outputs.VERSION }}" --push
+          echo "Successfully updated okf-memory/okf-memory.github.io to ${{ steps.get_version.outputs.VERSION }}!"
+

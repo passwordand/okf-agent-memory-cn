@@ -3,6 +3,7 @@ package okf_test
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -54,11 +55,91 @@ This is the body text with a footnote.[^src1]
 	}
 
 	serialized := okf.SerializeConcept(c)
-	if !strings.Contains(serialized, "custom_field: custom_value") {
+	if !strings.Contains(serialized, `custom_field: "custom_value"`) {
 		t.Errorf("Serialized output did not preserve custom_field: %s", serialized)
 	}
 	if !strings.Contains(serialized, "type: Decision") {
 		t.Errorf("Serialized output missing type: %s", serialized)
+	}
+}
+
+func TestFlowCollectionsPreserveQuotedCommas(t *testing.T) {
+	list := okf.ParseStringList(`["research, development", ML]`, nil)
+	if len(list) != 2 || list[0] != "research, development" || list[1] != "ML" {
+		t.Fatalf("ParseStringList() = %#v", list)
+	}
+
+	mapping := okf.ParseFlowMapping(`{ by: "human:reviewer, primary", at: "2026-09-10T00:00:00Z" }`)
+	if mapping["by"] != "human:reviewer, primary" {
+		t.Fatalf("ParseFlowMapping()[by] = %q", mapping["by"])
+	}
+}
+
+func TestExtraMetadataSerializationIsSafeAndDeterministic(t *testing.T) {
+	c := &okf.Concept{
+		Type: "Fact",
+		Body: "# Fact",
+		Extra: map[string]any{
+			"zeta":         "null",
+			"alpha":        "line one\n---\nline two",
+			"unsafe:key":   "preserved",
+			"count":        3,
+			"enabled":      true,
+			"labels":       []string{"alpha", "beta"},
+			"settings":     map[string]any{"threshold": 0.5},
+			"display name": "visible",
+			"ключ":         "значение",
+		},
+	}
+
+	serialized := okf.SerializeConcept(c)
+	if strings.Index(serialized, "alpha:") > strings.Index(serialized, "zeta:") {
+		t.Fatalf("extra keys are not sorted: %s", serialized)
+	}
+	if strings.Count(serialized, "\n---\n") != 1 {
+		t.Fatalf("extra value injected a frontmatter delimiter: %s", serialized)
+	}
+
+	parsed, err := okf.ParseConcept("test.md", serialized)
+	if err != nil {
+		t.Fatalf("ParseConcept() failed after serialization: %v", err)
+	}
+	if parsed.Extra["zeta"] != "null" || parsed.Extra["alpha"] != "line one\n---\nline two" || parsed.Extra["unsafe:key"] != "preserved" || parsed.Extra["display name"] != "visible" || parsed.Extra["ключ"] != "значение" {
+		t.Fatalf("extra metadata did not round-trip: %#v", parsed.Extra)
+	}
+	if parsed.Extra["count"] != float64(3) || parsed.Extra["enabled"] != true {
+		t.Fatalf("extra scalar types did not round-trip: %#v", parsed.Extra)
+	}
+	if !reflect.DeepEqual(parsed.Extra["labels"], []any{"alpha", "beta"}) || !reflect.DeepEqual(parsed.Extra["settings"], map[string]any{"threshold": 0.5}) {
+		t.Fatalf("extra collection types did not round-trip: %#v", parsed.Extra)
+	}
+}
+
+func TestExtraBlockMetadataIsStableAcrossRoundTrips(t *testing.T) {
+	raw := `---
+type: Fact
+custom:
+  nested: value
+  items:
+    - one
+    - two
+---
+
+# Fact
+`
+
+	first, err := okf.ParseConcept("test.md", raw)
+	if err != nil {
+		t.Fatalf("first ParseConcept() failed: %v", err)
+	}
+	firstSerialized := okf.SerializeConcept(first)
+	second, err := okf.ParseConcept("test.md", firstSerialized)
+	if err != nil {
+		t.Fatalf("second ParseConcept() failed: %v", err)
+	}
+	secondSerialized := okf.SerializeConcept(second)
+	if firstSerialized != secondSerialized {
+		t.Fatalf("block metadata drifted across round trips:\nfirst:\n%s\nsecond:\n%s", firstSerialized, secondSerialized)
 	}
 }
 
@@ -111,6 +192,25 @@ func TestSearchEngine(t *testing.T) {
 	}
 }
 
+func TestSearchSupportsUnicodeTerms(t *testing.T) {
+	b := &okf.Bundle{
+		Concepts: map[string]*okf.Concept{
+			"research/tensor": {
+				ID:          "research/tensor",
+				Title:       "Тензорная декомпозиция",
+				Description: "Методы восстановления динамических систем.",
+			},
+		},
+		Graph:        map[string][]string{},
+		InboundGraph: map[string][]string{},
+	}
+
+	results := b.Search("тензорная декомпозиция", 5)
+	if len(results) != 1 || results[0].ConceptID != "research/tensor" {
+		t.Fatalf("Search() = %#v, want research/tensor", results)
+	}
+}
+
 func TestSearchSupportsChineseTerms(t *testing.T) {
 	b := &okf.Bundle{Concepts: map[string]*okf.Concept{
 		"auth/login": {
@@ -129,6 +229,40 @@ func TestSearchSupportsChineseTerms(t *testing.T) {
 		if got := b.Search(query, 5); len(got) == 0 {
 			t.Fatalf("Search(%q) returned no result", query)
 		}
+	}
+}
+
+func TestSearchUsesConceptIDToBreakScoreTies(t *testing.T) {
+	b := &okf.Bundle{
+		Concepts: map[string]*okf.Concept{
+			"zeta":  {ID: "zeta", Title: "Shared title"},
+			"alpha": {ID: "alpha", Title: "Shared title"},
+		},
+		Graph:        map[string][]string{},
+		InboundGraph: map[string][]string{},
+	}
+
+	results := b.Search("shared", 1)
+	if len(results) != 1 || results[0].ConceptID != "alpha" {
+		t.Fatalf("Search() top result = %#v, want alpha", results)
+	}
+}
+
+func TestSearchTreatsSingleRuneTermsConsistently(t *testing.T) {
+	b := &okf.Bundle{
+		Concepts: map[string]*okf.Concept{
+			"latin":    {ID: "latin", Title: "A"},
+			"cyrillic": {ID: "cyrillic", Title: "Я"},
+		},
+		Graph:        map[string][]string{},
+		InboundGraph: map[string][]string{},
+	}
+
+	if got := b.Search("a", 1); len(got) != 1 || got[0].ConceptID != "latin" {
+		t.Fatalf("Search(\"a\") = %#v, want latin", got)
+	}
+	if got := b.Search("я", 1); len(got) != 1 || got[0].ConceptID != "cyrillic" {
+		t.Fatalf("Search(\"я\") = %#v, want cyrillic", got)
 	}
 }
 
@@ -216,6 +350,123 @@ func TestRelateConcepts(t *testing.T) {
 	}
 	if !strings.Contains(string(data), "[OAuth2 Flow](../auth/oauth.md)") {
 		t.Errorf("gateway.md missing relative link: %s", string(data))
+	}
+
+	if err := okf.RelateConcepts(tmpDir, "services/gateway", "auth/oauth", "verifies incoming tokens", "agent/test"); err != nil {
+		t.Fatalf("second RelateConcepts failed: %v", err)
+	}
+
+	data, err = os.ReadFile(filepath.Join(tmpDir, "services", "gateway.md"))
+	if err != nil {
+		t.Fatalf("Failed to re-read gateway.md: %v", err)
+	}
+	if got := strings.Count(string(data), "[OAuth2 Flow](../auth/oauth.md): verifies incoming tokens"); got != 1 {
+		t.Errorf("relationship appears %d times, want exactly once: %s", got, string(data))
+	}
+
+	logData, err := os.ReadFile(filepath.Join(tmpDir, "log.md"))
+	if err != nil {
+		t.Fatalf("Failed to read log.md: %v", err)
+	}
+	if got := strings.Count(string(logData), "Linked `services/gateway.md` to `auth/oauth.md`"); got != 1 {
+		t.Errorf("relationship log appears %d times, want exactly once: %s", got, string(logData))
+	}
+	if strings.Contains(string(logData), "Updated concept `services/gateway.md`.") {
+		t.Errorf("relation created a redundant generic update log: %s", string(logData))
+	}
+
+	if err := okf.RelateConcepts(tmpDir, "services/gateway", "auth/oauth", "verifies incoming tokens and roles", "agent/test"); err != nil {
+		t.Fatalf("RelateConcepts with a distinct description failed: %v", err)
+	}
+	data, err = os.ReadFile(filepath.Join(tmpDir, "services", "gateway.md"))
+	if err != nil {
+		t.Fatalf("Failed to read gateway.md after distinct relation: %v", err)
+	}
+	if got := strings.Count(string(data), "[OAuth2 Flow](../auth/oauth.md)"); got != 2 {
+		t.Errorf("distinct relationships produced %d links, want 2: %s", got, string(data))
+	}
+
+	c1.Title = "OAuth 2.0 Flow"
+	if err := okf.SaveConcept(tmpDir, c1, false, false, false, "agent/test"); err != nil {
+		t.Fatalf("SaveConcept after title change failed: %v", err)
+	}
+	if err := okf.RelateConcepts(tmpDir, "services/gateway", "auth/oauth", "verifies incoming tokens", "agent/test"); err != nil {
+		t.Fatalf("RelateConcepts after target title change failed: %v", err)
+	}
+	data, err = os.ReadFile(filepath.Join(tmpDir, "services", "gateway.md"))
+	if err != nil {
+		t.Fatalf("Failed to read gateway.md after target title change: %v", err)
+	}
+	if got := strings.Count(string(data), "](../auth/oauth.md)"); got != 2 {
+		t.Errorf("target title change duplicated an existing relationship: %s", string(data))
+	}
+}
+
+func TestRelateConceptsUsesCanonicalRelatedSection(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := okf.InitBundle(tmpDir); err != nil {
+		t.Fatalf("InitBundle failed: %v", err)
+	}
+
+	target := &okf.Concept{Path: "target.md", Type: "Fact", Title: "Target", Body: "# Target"}
+	source := &okf.Concept{
+		Path:  "source.md",
+		Type:  "Fact",
+		Title: "Source",
+		Body:  "# Source\n\n# Related Work\n\nBackground research.",
+	}
+	if err := okf.SaveConcept(tmpDir, target, true, false, false, "agent/test"); err != nil {
+		t.Fatalf("Save target failed: %v", err)
+	}
+	if err := okf.SaveConcept(tmpDir, source, true, false, false, "agent/test"); err != nil {
+		t.Fatalf("Save source failed: %v", err)
+	}
+
+	for i := 0; i < 2; i++ {
+		if err := okf.RelateConcepts(tmpDir, "source", "target", "supports", "agent/test"); err != nil {
+			t.Fatalf("RelateConcepts call %d failed: %v", i+1, err)
+		}
+	}
+	data, err := os.ReadFile(filepath.Join(tmpDir, "source.md"))
+	if err != nil {
+		t.Fatalf("Read source failed: %v", err)
+	}
+	content := string(data)
+	if strings.Count(content, "# Related Concepts") != 1 || strings.Count(content, "[Target](target.md): supports") != 1 {
+		t.Fatalf("canonical related section is not idempotent: %s", content)
+	}
+
+	source.Body = "# Source\n\n# Related Concepts\n\n- Existing relation\n\n# Notes\n\nKeep this last."
+	if err := okf.SaveConcept(tmpDir, source, false, false, false, "agent/test"); err != nil {
+		t.Fatalf("Reset source failed: %v", err)
+	}
+	if err := okf.RelateConcepts(tmpDir, "source", "target", "supports", "agent/test"); err != nil {
+		t.Fatalf("RelateConcepts before trailing section failed: %v", err)
+	}
+	data, err = os.ReadFile(filepath.Join(tmpDir, "source.md"))
+	if err != nil {
+		t.Fatalf("Read source after trailing section failed: %v", err)
+	}
+	content = string(data)
+	if strings.Index(content, "[Target](target.md): supports") > strings.Index(content, "# Notes") {
+		t.Fatalf("relationship was inserted outside the Related section: %s", content)
+	}
+
+	source.Body = "# Source\n\n# Related Concepts\n\n```markdown\n- [Target](target.md): illustrated only\n```"
+	if err := okf.SaveConcept(tmpDir, source, false, false, false, "agent/test"); err != nil {
+		t.Fatalf("Reset source with fenced example failed: %v", err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := okf.RelateConcepts(tmpDir, "source", "target", "illustrated only", "agent/test"); err != nil {
+			t.Fatalf("RelateConcepts with fenced example call %d failed: %v", i+1, err)
+		}
+	}
+	data, err = os.ReadFile(filepath.Join(tmpDir, "source.md"))
+	if err != nil {
+		t.Fatalf("Read source with fenced example failed: %v", err)
+	}
+	if got := strings.Count(string(data), "[Target](target.md): illustrated only"); got != 2 {
+		t.Fatalf("fenced example suppressed or duplicated the real relationship: got %d occurrences\n%s", got, string(data))
 	}
 }
 
@@ -884,5 +1135,50 @@ Also invalid navigation: [Root Agents](../AGENTS.md), [Root Log](../log.md), and
 		if !strings.Contains(bl.Reason, "navigation") {
 			t.Errorf("Expected navigation reason for broken link %q, got %q", bl.TargetHref, bl.Reason)
 		}
+	}
+}
+
+func TestLoadBundle_ProjectRootWithKnowledgeSubdirAndAgentsMD(t *testing.T) {
+	projDir := t.TempDir()
+	agentsMD := filepath.Join(projDir, "AGENTS.md")
+	if err := os.WriteFile(agentsMD, []byte("# AGENTS.md\nRules here...\n"), 0o644); err != nil {
+		t.Fatalf("failed to write AGENTS.md: %v", err)
+	}
+
+	knowledgeDir := filepath.Join(projDir, "knowledge")
+	if err := os.MkdirAll(knowledgeDir, 0o755); err != nil {
+		t.Fatalf("failed to create knowledge dir: %v", err)
+	}
+	indexMD := filepath.Join(knowledgeDir, "index.md")
+	if err := os.WriteFile(indexMD, []byte("---\nokf_version: \"0.2\"\n---\n# KB\n"), 0o644); err != nil {
+		t.Fatalf("failed to write index.md: %v", err)
+	}
+	conceptMD := filepath.Join(knowledgeDir, "fact.md")
+	if err := os.WriteFile(conceptMD, []byte("---\ntitle: Fact\ntype: Fact\ndescription: Test fact\n---\nContent\n"), 0o644); err != nil {
+		t.Fatalf("failed to write fact.md: %v", err)
+	}
+
+	// Load directly from project root (not knowledge/)
+	b, err := okf.LoadBundle(projDir)
+	if err != nil {
+		t.Fatalf("LoadBundle on project root failed: %v", err)
+	}
+
+	if b.DeclaredVer != "0.2" {
+		t.Errorf("Expected DeclaredVer '0.2', got %q", b.DeclaredVer)
+	}
+	if len(b.Concepts) != 1 {
+		t.Errorf("Expected 1 concept, got %d (%+v)", len(b.Concepts), b.Concepts)
+	}
+	if _, ok := b.Concepts["fact"]; !ok {
+		t.Errorf("Expected concept 'fact' to be loaded")
+	}
+	if _, ok := b.Concepts["AGENTS"]; ok {
+		t.Errorf("AGENTS.md should not be loaded as a concept")
+	}
+
+	res := okf.Validate(b, okf.ValidateOptions{Strict: true})
+	if !res.IsConformant || !res.GatePassed {
+		t.Errorf("Expected valid conformant bundle, got errors: %v, warnings: %v", res.Errors, res.Warnings)
 	}
 }

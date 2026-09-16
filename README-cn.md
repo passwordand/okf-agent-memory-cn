@@ -1,9 +1,15 @@
 # OKF 中文检索改造版
 
-这是 OKF Agent Memory v0.1.5 的中文检索改造版，使用 `go-ego/gse` 处理中文和中英文混合文本。它保持 OKF 的 Markdown 数据格式、CLI 和 MCP 接口兼容性，不连接或修改任何现有记忆库。
+这是 [OKF Agent Memory](https://github.com/okf-memory/okf-agent-memory) v0.3.1 的中文检索改造版，使用 `go-ego/gse` 处理中文和中英文混合文本。它保持 OKF 的 Markdown 数据格式、CLI 和 MCP 接口兼容性，不连接或修改任何现有记忆库。
+
+## 源码
+
+- 上游源码：https://github.com/okf-memory/okf-agent-memory
+- 本仓库：https://github.com/passwordand/okf-agent-memory-cn
 
 ## 改动内容
 
+- 基于上游 v0.3.1；
 - 使用 gse 搜索模式处理中文分词；
 - 保留英文、数字和概念 ID 检索；
 - 分词器只初始化一次，避免重复加载词典；
@@ -13,12 +19,12 @@
 
 ## 验证状态
 
-已使用 Go 1.25.0 完成构建，并用中文混合语料验证 `登录`、`鉴权`、`知识库`、`Unity 动画帧` 等查询。`pkg/okf` 测试通过；官方 `cmd/okf` 中部分 MCP 安全测试在 Windows 下仍有原有兼容性问题，与 gse 搜索改动无关。
+已基于上游 v0.3.1 合入 gse 中文检索。`pkg/okf` 测试应通过；官方 `cmd/okf` 中部分 MCP 安全测试在 Windows 下仍有原有兼容性问题，与 gse 搜索改动无关。
 
 ## 公开文档
 
-- [OKF CLI 文档](docs/CLI.md)
-- [OKF MCP / 接入说明](docs/GETTING_STARTED.md)
+- [OKF CLI 文档](docs/guides/CLI.md)
+- [OKF MCP / 接入说明](docs/guides/GETTING_STARTED.md)
 
 ## 下载预编译版本（推荐）
 
@@ -42,4 +48,3 @@
 ```
 
 构建后的 `dist/okf-cn.exe` 是本地产物，不纳入 Git；跨电脑部署时可从源码重新构建。现有 `%USERPROFILE%\.config\agent-memory\bin\okf.exe` 不会被替换。
-

@@ -1,40 +1,35 @@
-# Progressive Disclosure Benchmark: Monolith Context vs. OKF Agent Memory
+# Dual-Memory Agent Architecture (DMAA) Benchmark Suite
 
-> **Automated Benchmark Suite** quantifying prompt token reduction, prefill latency (Time-To-First-Token / TTFT), and instruction adherence on local Large Language Models (Gemma 26B, Gemma 12B, Qwen 35B, Llama 3) via LM Studio or any OpenAI-compatible server.
+> **Automated Benchmark Suite** quantifying prompt token reduction, prefill latency (Time-To-First-Token / TTFT), and instruction adherence on local Large Language Models (Gemma, Qwen, Llama 3) and cloud APIs (OpenAI, Anthropic, Google) via `okf-benchmark`.
+
+* 📖 **Detailed Specification & Peer Methodology Guide**: [docs/guides/BENCHMARKING_METHODOLOGY.md](../docs/guides/BENCHMARKING_METHODOLOGY.md)
 
 ---
 
-## 🎯 Benchmark Objective
+## 🎯 Benchmark Objectives
 
-AI coding agents often suffer from **Context Bloat** and **Attention Degradation (Lost-in-the-Middle)** when entire project architectures are dumped into monolithic context files (`CLAUDE.md`, `AGENTS.md`).
+AI coding agents suffer from **Context Bloat** and **Attention Degradation (Lost-in-the-Middle)** when entire project architectures and verbose conversational rules are dumped into monolithic context files (`CLAUDE.md`, `.cursorrules`).
 
-This benchmark suite measures the difference between two approaches when asking an LLM to implement an enterprise encryption payload:
+This benchmark suite measures the quantitative impact of the **Dual-Memory Agent Architecture (DMAA)**:
 
-1. **Run 1: Monolith Context Dump**  
-   The LLM is fed the entire project documentation (~11.5k characters, ~3,000 tokens) covering architecture, databases, Kubernetes, Stripe, Redis, telemetry, and security policies.
-2. **Run 2: OKF Progressive Disclosure**  
-   The Go core executes an in-memory BM25 search (`< 300 µs`), isolates the single relevant concept (`security/encryption-policy`, ~500 tokens), and feeds only that atomic concept to the LLM.
+1. **Layer 1 (Push Working Memory / `-suite push`)**:  
+   Compares conversational English `.cursorrules` (~650 tokens) against compact **Agent Action Grammar (AAG)** guard clauses (~210 tokens). Evaluates token reduction, TTFT, and negative constraint adherence (Mermaid syntax, provenance integrity, governance stop triggers).
+2. **Layer 2 (Pull Knowledge Memory / `-suite pull`)**:  
+   Compares a monolithic documentation dump (~3,000 tokens) against **OKF Progressive Disclosure** via fast in-memory BM25 retrieval (~550 tokens).
+3. **Full DMAA Stack (`-suite dmaa`)**:  
+   Evaluates the unified system impact of combining both layers against the industry status quo.
 
 ---
 
 ## 📊 Live Benchmark Evidence
 
-Measured on Apple Silicon with LM Studio:
+### Apple Silicon M2 Pro (32 GB) — Empirical DMAA Benchmark (`qwen/qwen2.5-coder-14b` via LM Studio)
 
-### Gemma 26B (`google/gemma-4-26b-a4b-qat`)
-| Metric | Monolith Context Dump | OKF Progressive Disclosure | Delta |
+| Architecture Tier | Industry Monolith | OKF DMAA Stack | Savings / Acceleration |
 | :--- | :--- | :--- | :--- |
-| **Prompt Input Tokens** | `3,034` tokens | `603` tokens | **-80.1% context overhead** |
-| **Prefill Latency (TTFT)** | `47.7 s` | `27.1 s` | **1.8x faster Time-To-First-Token** |
-| **Total Turn Time** | `70.1 s` | `49.3 s` | **-20.8 s total turnaround** |
-| **Policy Compliance** | 4/4 passed | 4/4 passed | 100% Consistent |
-
-### Gemma 12B (`google/gemma-4-12b-qat`)
-| Metric | Monolith Context Dump | OKF Progressive Disclosure | Delta |
-| :--- | :--- | :--- | :--- |
-| **Prompt Input Tokens** | `3,034` tokens | `603` tokens | **-80.1% context overhead** |
-| **Prefill Latency (TTFT)** | `50.1 s` | `45.8 s` | **1.1x faster** |
-| **Policy Compliance** | 1/4 passed (attention lost) | 4/4 passed (strict adherence) | **Progressive Disclosure prevents hallucination** |
+| **Layer 1 (Push Working Memory)** | `687 tok` | `270 tok` | **-60.7% steering tax** (2.3x faster TTFT) |
+| **Layer 2 (Pull Knowledge Memory)** | `3,055 tok` | `627 tok` | **-79.5% context overhead** (4.7x faster TTFT) |
+| **Combined System Overhead** | `3,742 tok` | `897 tok` | **🔥 -76.0% context tax per turn** (3.9x faster TTFT) |
 
 ---
 
@@ -42,43 +37,39 @@ Measured on Apple Silicon with LM Studio:
 
 The benchmark runner `okf-benchmark` is written in **100% pure Go** with zero external dependencies.
 
-### Option A: Local LLMs (LM Studio or Ollama)
+### 1. Local LLMs (LM Studio or Ollama)
 ```bash
 # 1. Local LM Studio (Default, listening on http://localhost:1234)
-go run ./cmd/okf-benchmark
+go run ./cmd/okf-benchmark -suite push
+go run ./cmd/okf-benchmark -suite pull
+go run ./cmd/okf-benchmark -suite dmaa
 
 # 2. Local Ollama (listening on http://localhost:11434)
-go run ./cmd/okf-benchmark -p ollama -m llama3.2
+go run ./cmd/okf-benchmark -p ollama -m llama3.2 -suite dmaa
 ```
 
-### Option B: Cloud Providers (OpenAI, Claude, Gemini)
+### 3. Cloud Providers (OpenAI, Claude, Gemini)
 ```bash
-# 1. OpenAI (uses OPENAI_API_KEY environment variable)
+# OpenAI (uses OPENAI_API_KEY)
 export OPENAI_API_KEY="sk-..."
-go run ./cmd/okf-benchmark -p openai -m gpt-4o
+go run ./cmd/okf-benchmark -p openai -m gpt-4o -suite dmaa
 
-# 2. Anthropic Claude (uses ANTHROPIC_API_KEY environment variable)
+# Anthropic Claude (uses ANTHROPIC_API_KEY)
 export ANTHROPIC_API_KEY="sk-ant-..."
-go run ./cmd/okf-benchmark -p claude -m claude-3-7-sonnet-20250219
+go run ./cmd/okf-benchmark -p claude -m claude-3-7-sonnet-20250219 -suite dmaa
 
-# 3. Google Gemini (uses GEMINI_API_KEY environment variable)
+# Google Gemini (uses GEMINI_API_KEY)
 export GEMINI_API_KEY="AIza..."
-go run ./cmd/okf-benchmark -p gemini -m gemini-2.5-flash
+go run ./cmd/okf-benchmark -p gemini -m gemini-2.5-flash -suite dmaa
 ```
 
 ### Useful Flags
 ```bash
-# Compare the exact generated Go code side-by-side:
-go run ./cmd/okf-benchmark -o
+# Compare the exact generated responses side-by-side:
+go run ./cmd/okf-benchmark -suite dmaa -o
 
-# Or simulate in dry-run mode (no LLM or API keys required):
-go run ./cmd/okf-benchmark --dry-run
-```
-
-Alternatively using Make:
-```bash
-make benchmark ARGS="-p openai -m gpt-4o"
-make benchmark ARGS="-dry-run -o"
+# Adjust timeout for deep reasoning models:
+go run ./cmd/okf-benchmark -timeout 300s
 ```
 
 ---
@@ -87,14 +78,11 @@ make benchmark ARGS="-dry-run -o"
 
 ```
 benchmarks/
-├── README.md               # This guide
+├── README.md               # This overview
 ├── data/
-│   ├── MONOLITH_DOCS.md    # Combined documentation dump (~11.5k chars)
-│   └── knowledge/          # Compliant OKF v0.2 bundle (8 atomic concepts)
-│       ├── index.md
-│       ├── log.md
-│       └── security/encryption-policy.md  # Target concept
-└── results/
-    ├── BENCHMARK_RESULTS_gemma-4-26b-a4b-qat.md
-    └── BENCHMARK_RESULTS_google_gemma-4-12b-qat.md
+│   ├── PROSE_RULES.md      # Baseline conversational steering rules (.cursorrules)
+│   ├── AAG_RULES.md        # Treatment Agent Action Grammar steering rules (AGENTS.md)
+│   ├── MONOLITH_DOCS.md    # Baseline monolithic project documentation dump
+│   └── knowledge/          # Treatment OKF v0.2 knowledge corpus for BM25 retrieval
+└── results/                # Timestamped markdown benchmark reports
 ```

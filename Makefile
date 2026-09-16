@@ -1,4 +1,4 @@
-.PHONY: all build build-benchmark install test fmt vet lint vuln audit-security jules-list jules-review jules-merge validate validate-examples validate-all check release dist-bundle benchmark clean help
+.PHONY: all build build-benchmark install test fmt vet lint vuln audit-security jules-list jules-review jules-merge validate validate-examples validate-all check release dist-bundle benchmark clean help sync-assets
 
 BIN := bin/okf
 BUNDLE := knowledge
@@ -19,9 +19,16 @@ all: help
 ## check: Run the complete CI/local pipeline (fmt, vet, lint, test, validate-all)
 check: fmt vet lint test validate-all
 
-## test: Run all Go unit and integration tests
+## test: Run all Go unit and integration tests (including dogfood asset drift check)
 test:
-	@go test -v ./...
+	@go test -v -race ./...
+
+## sync-assets: Synchronize active skill files (.agents/skills/) to embedded bootstrap assets (pkg/okf/assets/skill/)
+sync-assets:
+	@echo "==> Synchronizing dogfooded skills to embedded bootstrap assets..."
+	@mkdir -p pkg/okf/assets/skill
+	@cp -R .agents/skills/okf-memory/* pkg/okf/assets/skill/
+	@echo "==> Done. Embedded assets in pkg/okf/assets/skill/ are now synchronized."
 
 ## fmt: Format all Go source files with gofumpt / gofmt
 fmt:
@@ -31,9 +38,13 @@ fmt:
 vet:
 	@go vet ./...
 
-## lint: Run golangci-lint static analysis (falls back to go vet)
+## lint: Run golangci-lint static analysis (falls back to go vet if not installed)
 lint:
-	@which golangci-lint > /dev/null && golangci-lint run ./... || go vet ./...
+	@if command -v golangci-lint > /dev/null 2>&1; then \
+		golangci-lint run ./...; \
+	else \
+		go vet ./...; \
+	fi
 
 ## audit-security: Run automated security analysis (gosec and govulncheck)
 audit-security:
@@ -79,11 +90,11 @@ install:
 validate: build
 	@$(BIN) validate $(BUNDLE) --strict --drift
 
-## validate-examples: Validate all bundled example corpora
+## validate-examples: Validate all bundled example corpora including AGENTS.md governance
 validate-examples: build
-	@$(BIN) validate examples/software --strict
-	@$(BIN) validate examples/coaching --strict
-	@$(BIN) validate examples/books --strict
+	@$(BIN) validate --agents --strict examples/software
+	@$(BIN) validate --agents --strict examples/coaching
+	@$(BIN) validate --agents --strict examples/books
 
 ## validate-all: Validate project knowledge and all examples
 validate-all: validate validate-examples

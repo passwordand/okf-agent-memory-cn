@@ -6,3 +6,4 @@
 * [MCP Tool Security & Untrusted Agent Input](mcp-agent-safety.md) - Conventions for agentic memory operations treating all tool arguments as untrusted input and enforcing boundary confinement.
 * [Automated Security Auditing & Jules Remediation Workflow](security-audit.md) - Proactive continuous security auditing with Google Jules and the isolated worktree review and merge workflow.
 * [Engineering & Coding Best Practices (Clean Code, TDD, DRY)](coding-standards.md) - Core software engineering conventions for agents and humans covering Clean Code, TDD, DRY, idiomatic Go, and zero-dependency design.
+* [Dual-Memory Agent Architecture & Agent Action Grammar](dual-memory-architecture.md) - Two-layer memory model separating normative working memory (Push/AAG) from semantic domain memory (Pull/OKF).
