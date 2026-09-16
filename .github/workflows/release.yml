@@ -97,20 +97,20 @@ jobs:
           cat <<EOF > Formula/okf.rb
           class Okf < Formula
             desc "Domain-neutral, Git-native persistent project memory for AI agents (OKF v0.2)"
-            homepage "https://github.com/okf-memory/okf-agent-memory"
+            homepage "https://github.com/passwordand/okf-agent-memory-cn"
             version "${CLEAN_VER}"
             license "MIT"
 
             on_macos do
               if Hardware::CPU.arm?
-                url "https://github.com/okf-memory/okf-agent-memory/releases/download/${TAG_VER}/okf-darwin-arm64"
+                url "https://github.com/passwordand/okf-agent-memory-cn/releases/download/${TAG_VER}/okf-darwin-arm64"
                 sha256 "${ARM64_MAC_SHA}"
 
                 def install
                   bin.install "okf-darwin-arm64" => "okf"
                 end
               else
-                url "https://github.com/okf-memory/okf-agent-memory/releases/download/${TAG_VER}/okf-darwin-amd64"
+                url "https://github.com/passwordand/okf-agent-memory-cn/releases/download/${TAG_VER}/okf-darwin-amd64"
                 sha256 "${AMD64_MAC_SHA}"
 
                 def install
@@ -121,14 +121,14 @@ jobs:
 
             on_linux do
               if Hardware::CPU.arm?
-                url "https://github.com/okf-memory/okf-agent-memory/releases/download/${TAG_VER}/okf-linux-arm64"
+                url "https://github.com/passwordand/okf-agent-memory-cn/releases/download/${TAG_VER}/okf-linux-arm64"
                 sha256 "${ARM64_LINUX_SHA}"
 
                 def install
                   bin.install "okf-linux-arm64" => "okf"
                 end
               else
-                url "https://github.com/okf-memory/okf-agent-memory/releases/download/${TAG_VER}/okf-linux-amd64"
+                url "https://github.com/passwordand/okf-agent-memory-cn/releases/download/${TAG_VER}/okf-linux-amd64"
                 sha256 "${AMD64_LINUX_SHA}"
 
                 def install
@@ -181,4 +181,3 @@ jobs:
             git push origin main
             echo "Successfully updated okf-memory/homebrew-tap!"
           fi
-

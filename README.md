@@ -20,7 +20,22 @@
 
 ## 快速开始
 
-### Windows PowerShell
+### 下载预编译版本（推荐）
+
+跨电脑部署无需重新编译。前往 [GitHub Releases](https://github.com/passwordand/okf-agent-memory-cn/releases)，按系统和架构下载对应文件：
+
+- Windows x64：`okf-windows-amd64.exe`
+- Windows ARM64：`okf-windows-arm64.exe`
+- macOS Apple Silicon：`okf-darwin-arm64`
+- macOS Intel：`okf-darwin-amd64`
+- Linux x64：`okf-linux-amd64`
+- Linux ARM64：`okf-linux-arm64`
+
+下载后直接运行 `okf version` 验证即可。只有修改 Go 源码，或 Release 没有覆盖目标平台时，才需要重新编译。
+
+### 从源码构建（开发者）
+
+#### Windows PowerShell
 
 需要 Go 1.25 或兼容版本：
 
