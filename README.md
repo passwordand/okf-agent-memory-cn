@@ -31,7 +31,7 @@
 - Linux x64：`okf-linux-amd64`
 - Linux ARM64：`okf-linux-arm64`
 
-下载后直接运行 `okf version` 验证即可。只有修改 Go 源码，或 Release 没有覆盖目标平台时，才需要重新编译。
+下载后将文件重命名为 `okf.exe`（Windows）或 `okf`（macOS/Linux），并把它放到 PATH；macOS/Linux 还需要执行 `chmod +x okf`。随后运行 `okf version` 验证即可。只有修改 Go 源码，或 Release 没有覆盖目标平台时，才需要重新编译。
 
 ### 从源码构建（开发者）
 
