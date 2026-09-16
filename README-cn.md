@@ -1,0 +1,31 @@
+# OKF 中文检索改造版
+
+这是 OKF Agent Memory v0.1.5 的中文检索改造版，使用 `go-ego/gse` 处理中文和中英文混合文本。它保持 OKF 的 Markdown 数据格式、CLI 和 MCP 接口兼容性，不连接或修改任何现有记忆库。
+
+## 改动内容
+
+- 使用 gse 搜索模式处理中文分词；
+- 保留英文、数字和概念 ID 检索；
+- 分词器只初始化一次，避免重复加载词典；
+- 使用 gse 编译时嵌入词典，发布后的 exe 不依赖 Go 模块缓存路径；
+- 增加中文检索回归测试；
+- 提供 Windows PowerShell 构建脚本。
+
+## 验证状态
+
+已使用 Go 1.25.0 完成构建，并用中文混合语料验证 `登录`、`鉴权`、`知识库`、`Unity 动画帧` 等查询。`pkg/okf` 测试通过；官方 `cmd/okf` 中部分 MCP 安全测试在 Windows 下仍有原有兼容性问题，与 gse 搜索改动无关。
+
+## 配套文档
+
+- [OKF Memory 存在的问题与改善方案](docs/agent-memory/OKFMemory存在的问题与改善方案.md)
+- [AgentMemory 部署方案与步骤](docs/agent-memory/AgentMemory部署方案.md)
+
+## 从源码构建
+
+需要 Go 1.25 或兼容版本。在 Windows PowerShell 中运行：
+
+```powershell
+./build.ps1
+```
+
+构建后的 `dist/okf-cn.exe` 是本地产物，不纳入 Git；跨电脑部署时可从源码重新构建。现有 `%USERPROFILE%\.config\agent-memory\bin\okf.exe` 不会被替换。
