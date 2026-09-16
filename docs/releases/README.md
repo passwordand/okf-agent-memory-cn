@@ -4,6 +4,7 @@ Historical release notes for **OKF Agent Memory**.
 
 | Version | Release Date | Highlights |
 | :--- | :--- | :--- |
+| [**v0.3.1-cn.1**](./v0.3.1-cn.1.md) | 2026-09-16 | CN 改造版：对齐上游 v0.3.1，保留 gse 中文检索 |
 | [**v0.3.1**](./v0.3.1.md) | 2026-09-16 | DMAA Benchmark Engine, CLI Subcommand Help Handlers, Pre-Flight Warmup, Mermaid Sanitizer, AAG Skill Alignment |
 | [**v0.3.0**](./v0.3.0.md) | 2026-09-15 | Agent Action Grammar (AAG) RFC & Linter, Dual-Memory Agent Architecture (DMAA), Multi-Domain Codex, SSoT Tool Symlinks |
 | [**v0.2.0**](./v0.2.0.md) | 2026-09-12 | 3-Tier Epistemic Governance, `code_refs`, `--for-path`, CWE-22 Security Hardening, Dogfooding Invariants |
