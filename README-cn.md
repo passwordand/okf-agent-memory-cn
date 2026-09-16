@@ -23,8 +23,10 @@
 
 ## 公开文档
 
+- [主 README（含双 MCP wrapper 方案）](README.md)
 - [OKF CLI 文档](docs/guides/CLI.md)
 - [OKF MCP / 接入说明](docs/guides/GETTING_STARTED.md)
+- [双 MCP wrapper 示例](examples/dual-mcp/mem-mcp.js)
 
 ## 下载预编译版本（推荐）
 

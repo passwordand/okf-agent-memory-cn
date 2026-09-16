@@ -75,15 +75,115 @@ cd okf-agent-memory-cn
 ./dist/okf-cn.exe mcp knowledge
 ```
 
-## 接入原则
+## 项目库 + 全局库：双 MCP wrapper
 
-MCP 服务启动时指定要使用的 `knowledge` bundle。项目库和全局库可通过客户端配置分别指定路径；不要把真实记忆数据提交到本仓库。仓库只提供引擎、示例知识库和部署文档。
+官方 `okf mcp <bundle>` 在启动时固定一个根目录。向已运行的服务传 `bundle` 不能扩大这个边界；Windows 上不同盘符的原始路径也无法通过同一进程的相对路径检查。因此需要**两个 MCP 条目、两份独立进程**，而不是一个服务静默回退。
+
+目标：Agent 负责选库，用户只说「记住 / 查一下 / 做到哪了」。
+
+| MCP 条目 | 启动参数 | 默认 bundle | 用途 |
+|---|---|---|---|
+| `okf-project` | `--scope project` | 从进程 cwd 向上找最近的 `knowledge/index.md` | 当前项目进度、架构、决策 |
+| `okf-global` | `--scope global` | `~/.config/agent-memory/knowledge` | 通用偏好、跨项目约定 |
+
+推荐目录：
+
+```
+~/.config/agent-memory/
+  bin/okf.exe          # 或 macOS/Linux 下的 okf
+  mem-mcp.js           # 复制 examples/dual-mcp/mem-mcp.js
+  knowledge/           # 全局库：okf init 后使用
+<项目根>/knowledge/    # 项目库，随仓库走
+```
+
+示例脚本：[examples/dual-mcp/mem-mcp.js](examples/dual-mcp/mem-mcp.js)。行为约定：
+
+1. 必须显式 `--scope project|global`；缺参或未知参数非零退出。
+2. 项目模式可用 `--project-root <绝对项目根>`，只检查该根下的 `knowledge/index.md`，不再向上搜。
+3. 找不到项目库时输出 `PROJECT_BUNDLE_NOT_FOUND` 并失败；**不创建库、不回退全局**。
+4. 项目模式若定位到全局库真实路径，输出 `PROJECT_SCOPE_REJECTED_GLOBAL` 并失败。
+5. 子进程执行 `okf mcp <bundle>`，并把 `OKF_MCP_ROOT` 设为该 bundle 的真实绝对路径；定位日志只写 stderr。
+
+### OpenCode
+
+写入 `~/.config/opencode/opencode.json` 的 `mcp` 对象（保留其他服务）：
+
+```json
+{
+  "mcp": {
+    "okf-project": {
+      "type": "local",
+      "enabled": true,
+      "command": ["node", "C:\\Users\\<你>\\.config\\agent-memory\\mem-mcp.js", "--scope", "project"]
+    },
+    "okf-global": {
+      "type": "local",
+      "enabled": true,
+      "command": ["node", "C:\\Users\\<你>\\.config\\agent-memory\\mem-mcp.js", "--scope", "global"]
+    }
+  }
+}
+```
+
+不要给 `okf-project` 写死全局 `cwd`，否则会锁到一个项目。某个项目定位失败时，再在**该项目**配置里加 `--project-root`。
+
+### Codex
+
+写入 `~/.codex/config.toml`：
+
+```toml
+[mcp_servers.okf-project]
+command = "node"
+args = ["C:\\Users\\<你>\\.config\\agent-memory\\mem-mcp.js", "--scope", "project"]
+required = false
+
+[mcp_servers.okf-global]
+command = "node"
+args = ["C:\\Users\\<你>\\.config\\agent-memory\\mem-mcp.js", "--scope", "global"]
+```
+
+`required = false` 允许无项目库时项目服务失败，同时全局服务仍可用。
+
+### WorkBuddy
+
+写入 `~/.workbuddy/mcp.json`：
+
+```json
+{
+  "mcpServers": {
+    "okf-project": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["C:\\Users\\<你>\\.config\\agent-memory\\mem-mcp.js", "--scope", "project"]
+    },
+    "okf-global": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["C:\\Users\\<你>\\.config\\agent-memory\\mem-mcp.js", "--scope", "global"]
+    }
+  }
+}
+```
+
+权限里放行 `mcp__okf-project` 与 `mcp__okf-global`。不要改 marketplace 里会被覆盖的 `connectors/*/mcp.json`。
+
+### Agent 规则
+
+在客户端 `AGENTS.md`（或 WorkBuddy 的 `CODEBUDDY.md`）写明：
+
+- 项目进度 / 决策走 `okf-project`，偏好 / 跨项目约定走 `okf-global`。
+- 两边都查时分别调用并注明来源。
+- 无项目库时说明缺失；不得用全局进度冒充项目进度，也不得把项目内容静默写入全局。
+- 调用使用客户端实际服务器命名空间（例如 OpenCode 的 `okf-project_okf_show`）。
+
+改配置后必须重启客户端。不要把真实记忆数据提交到本仓库。
 
 ## 公开文档
 
 - [中文 README（简版）](README-cn.md)
 - [OKF CLI 文档](docs/guides/CLI.md)
 - [OKF MCP / 接入说明](docs/guides/GETTING_STARTED.md)
+- [双 MCP wrapper 示例](examples/dual-mcp/mem-mcp.js)
 - [上游项目](https://github.com/okf-memory/okf-agent-memory)
 
 ## 验证状态

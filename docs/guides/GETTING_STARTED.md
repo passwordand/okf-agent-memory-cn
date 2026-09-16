@@ -132,6 +132,8 @@ The agent will automatically gain access to tools:
 * `okf_relate`: Link concepts together
 * `okf_validate`: Audit corpus conformance
 
+A single `okf mcp knowledge` process is bound to one root. To keep a project bundle and a user-global bundle available at the same time (especially across Windows drive letters), run two MCP entries via [examples/dual-mcp/mem-mcp.js](../../examples/dual-mcp/mem-mcp.js). See the dual-wrapper section in the [root README](../../README.md).
+
 ### Gemini CLI / Codex
 
 Instruct your agent to read `AGENTS.md` and use the CLI directly:
