@@ -55,10 +55,8 @@ cd okf-agent-memory-cn
 
 MCP 服务启动时指定要使用的 `knowledge` bundle。项目库和全局库可通过客户端配置分别指定路径；不要把真实记忆数据提交到本仓库。仓库只提供引擎、示例知识库和部署文档。
 
-## 配套文档
+## 公开文档
 
-- [OKF Memory 存在的问题与改善方案](docs/agent-memory/OKFMemory存在的问题与改善方案.md)
-- [AgentMemory 部署方案与步骤](docs/agent-memory/AgentMemory部署方案.md)
 - [中文 README（简版）](README-cn.md)
 - [OKF CLI 文档](docs/CLI.md)
 - [OKF MCP / 接入说明](docs/GETTING_STARTED.md)
@@ -72,3 +70,4 @@ Windows 下官方 `cmd/okf` 的部分 MCP 安全测试仍有原有兼容性问�
 ## 许可证
 
 本项目沿用上游 OKF Agent Memory 的 MIT 许可证。
+
