@@ -21,7 +21,7 @@
 
 已基于上游 v0.3.1 合入 gse 中文检索。`pkg/okf` 测试应通过；官方 `cmd/okf` 中部分 MCP 安全测试在 Windows 下仍有原有兼容性问题，与 gse 搜索改动无关。
 
-严格 MCP 客户端请使用 **v0.3.1-cn.2 或更新**；`v0.3.1-cn.1` 的非 object `outputSchema` 会被标准 MCP SDK 拒绝。
+严格 MCP 客户端请使用 **v0.3.1-cn.3 或更新**；自该版起所有工具均不声明 `outputSchema`（服务端不返回 `structuredContent`），兼容标准 MCP SDK 的列表与调用两级校验。
 
 ## 公开文档
 

@@ -192,7 +192,7 @@ args = ["C:\\Users\\<你>\\.config\\agent-memory\\mem-mcp.js", "--scope", "globa
 
 Windows 下官方 `cmd/okf` 的部分 MCP 安全测试仍有原有兼容性问题，与 gse 搜索改动无关。
 
-严格 MCP 客户端（OpenCode、Codex 等）请使用 **v0.3.1-cn.2 或更新**。`v0.3.1-cn.1` 的 `outputSchema` 根类型不是 `object`，`tools/list` 会被标准 MCP SDK 拒绝。
+严格 MCP 客户端（OpenCode、Codex 等）请使用 **v0.3.1-cn.3 或更新**。`v0.3.1-cn.1` 的非 object `outputSchema` 会被标准 MCP SDK 在 `tools/list` 拒绝；`v0.3.1-cn.2` 保留的 object schema 因无 `structuredContent` 会在调用时被拒绝。本版起 6 个工具均不声明 `outputSchema`。
 
 ## 许可证
 
