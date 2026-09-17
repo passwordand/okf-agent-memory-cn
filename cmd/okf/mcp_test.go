@@ -94,28 +94,61 @@ func TestMCPHandshakeAndToolsList(t *testing.T) {
 }
 
 func TestMCPToolsListOutputSchemas(t *testing.T) {
-	// Every tool must advertise an outputSchema so clients can validate
-	// structured results (and typed confirmation strings) without guessing.
+	// MCP spec: if outputSchema is present, its root type MUST be "object".
+	// Tools that only return unstructured text content MUST omit outputSchema,
+	// otherwise strict clients reject tools/list (OpenCode / Codex SDK).
+	mustOmit := map[string]bool{
+		"okf_search": true,
+		"okf_create": true,
+		"okf_update": true,
+		"okf_relate": true,
+	}
+	mustHaveObject := map[string]bool{
+		"okf_show":     true,
+		"okf_validate": true,
+	}
+	seen := map[string]bool{}
 	for _, tool := range getMCPTools() {
 		name, _ := tool["name"].(string)
-		schema, ok := tool["outputSchema"].(map[string]any)
-		if !ok {
-			t.Errorf("Tool %q is missing outputSchema", name)
+		seen[name] = true
+		schema, hasSchema := tool["outputSchema"].(map[string]any)
+		if mustOmit[name] {
+			if hasSchema {
+				t.Errorf("Tool %q must omit outputSchema (root type was non-object; breaks MCP SDK validation)", name)
+			}
 			continue
 		}
-		if schema["type"] != "object" && schema["type"] != "array" && schema["type"] != "string" {
-			t.Errorf("Tool %q has unexpected outputSchema type %v", name, schema["type"])
+		if mustHaveObject[name] {
+			if !hasSchema {
+				t.Errorf("Tool %q is missing outputSchema", name)
+				continue
+			}
+			if schema["type"] != "object" {
+				t.Errorf("Tool %q outputSchema type = %v, want object", name, schema["type"])
+			}
+			if _, ok := schema["description"].(string); !ok {
+				t.Errorf("Tool %q outputSchema is missing a description", name)
+			}
+			continue
 		}
-		if _, ok := schema["description"].(string); !ok {
-			t.Errorf("Tool %q outputSchema is missing a description", name)
+		if hasSchema && schema["type"] != "object" {
+			t.Errorf("Tool %q has non-object outputSchema type %v", name, schema["type"])
+		}
+	}
+	for name := range mustOmit {
+		if !seen[name] {
+			t.Errorf("expected tool %q in getMCPTools()", name)
+		}
+	}
+	for name := range mustHaveObject {
+		if !seen[name] {
+			t.Errorf("expected tool %q in getMCPTools()", name)
 		}
 	}
 }
 
 func TestMCPOutputSchemasV02Properties(t *testing.T) {
-	// Schemas must cover the OKF v0.2.0 struct fields clients rely on
-	// (governance/code_refs for --for-path constraint checks, body for
-	// full-concept reads, gate/broken-link diagnostics for validation).
+	// Remaining object schemas must still cover OKF v0.2.0 fields.
 	byName := map[string]map[string]any{}
 	for _, tool := range getMCPTools() {
 		name, _ := tool["name"].(string)
@@ -127,18 +160,13 @@ func TestMCPOutputSchemasV02Properties(t *testing.T) {
 		if !ok {
 			t.Fatalf("Tool %q is missing outputSchema", tool)
 		}
-		if schema["type"] == "array" {
-			items, _ := schema["items"].(map[string]any)
-			p, _ := items["properties"].(map[string]any)
-			return p
+		if schema["type"] != "object" {
+			t.Fatalf("Tool %q outputSchema type = %v, want object", tool, schema["type"])
 		}
 		p, _ := schema["properties"].(map[string]any)
 		return p
 	}
 	for _, want := range []string{"governance", "code_refs"} {
-		if _, ok := props("okf_search")[want]; !ok {
-			t.Errorf("okf_search outputSchema missing %q", want)
-		}
 		if _, ok := props("okf_show")[want]; !ok {
 			t.Errorf("okf_show outputSchema missing %q", want)
 		}

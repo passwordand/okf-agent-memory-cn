@@ -246,27 +246,6 @@ func getMCPTools() []map[string]any {
 				},
 				"required": []string{},
 			},
-			"outputSchema": map[string]any{
-				"type":        "array",
-				"description": "Ranked matches (JSON array of search-result objects).",
-				"items": map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"concept_id":  map[string]any{"type": "string"},
-						"title":       map[string]any{"type": "string"},
-						"type":        map[string]any{"type": "string"},
-						"description": map[string]any{"type": "string"},
-						"governance":  map[string]any{"type": "string", "description": "Agent authority level: constraint | hold | context."},
-						"code_refs":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Source paths or globs this concept governs."},
-						"score":       map[string]any{"type": "number"},
-						"matched_on":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-						"tags":        map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-						"inbound":     map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-						"outbound":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-					},
-					"required": []string{"concept_id", "title", "type", "description", "score", "matched_on"},
-				},
-			},
 		},
 		{
 			"name":        "okf_show",
@@ -375,10 +354,6 @@ func getMCPTools() []map[string]any {
 				},
 				"required": []string{"concept_id", "type", "title", "description"},
 			},
-			"outputSchema": map[string]any{
-				"type":        "string",
-				"description": "Human-readable confirmation naming the created concept path.",
-			},
 		},
 		{
 			"name":        "okf_update",
@@ -406,10 +381,6 @@ func getMCPTools() []map[string]any {
 				},
 				"required": []string{"concept_id"},
 			},
-			"outputSchema": map[string]any{
-				"type":        "string",
-				"description": "Human-readable confirmation naming the updated concept path.",
-			},
 		},
 		{
 			"name":        "okf_relate",
@@ -432,10 +403,6 @@ func getMCPTools() []map[string]any {
 					"bundle": bundleProp,
 				},
 				"required": []string{"source_id", "target_id"},
-			},
-			"outputSchema": map[string]any{
-				"type":        "string",
-				"description": "Human-readable confirmation naming the linked concepts.",
 			},
 		},
 	}
