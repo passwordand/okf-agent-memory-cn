@@ -184,6 +184,8 @@ Initializes a bare OKF v0.2 bundle in a target directory with standard `index.md
 okf init [directory-path]
 ```
 
+Without a path, `okf init` creates `./knowledge/`. Use `okf init .` to explicitly initialize the current directory as a root bundle. Existing `index.md` and `log.md` are preserved.
+
 ---
 
 ### 8. `bootstrap`
@@ -218,13 +220,16 @@ Runs an embedded Model Context Protocol (MCP) server over standard I/O (`stdio`)
 okf mcp [bundle-path]
 ```
 
+With no path, MCP uses `./knowledge/` for a new project and continues to use `.` for an existing root bundle. Starting MCP does not create files. An agent can call `okf_init` after an explicit user request.
+
 #### Exposed MCP Tools
 
 | Tool Name | Parameters | Description |
 | :--- | :--- | :--- |
+| `okf_init` | none | Initialize the server-bound bundle only when explicitly called; creates `index.md` and `log.md` without overwriting existing files. |
 | `okf_search` | `query` (string, opt), `for_path` (string, opt), `limit` (int) | Query memory corpus via BM25 ranking, or find concepts governing a file via `code_refs`. |
 | `okf_show` | `concept_id` (string) | Fetch concept frontmatter, body, and graph links. |
 | `okf_create` | `id`, `type`, `title`, `description`, `body`, `tags` | Create concept with automatic index & log bookkeeping. |
 | `okf_update` | `id`, `title`, `description`, `body` | Update existing concept and record in log.md. |
 | `okf_relate` | `source_id`, `target_id`, `description` | Link two concepts together. |
-| `okf_validate` | `strict` (bool), `drift` (bool) | Verify bundle conformance. |
+| `okf_validate` | `strict` (bool), `stale` (bool) | Verify bundle conformance, including description drift. |

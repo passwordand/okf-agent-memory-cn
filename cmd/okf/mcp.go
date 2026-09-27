@@ -225,6 +225,15 @@ func getMCPTools() []map[string]any {
 
 	return []map[string]any{
 		{
+			"name":        "okf_init",
+			"description": "Initialize the server-bound OKF bundle when explicitly requested. Creates index.md and log.md without overwriting existing files; takes no path arguments.",
+			"inputSchema": map[string]any{
+				"type":       "object",
+				"properties": map[string]any{},
+				"required":   []string{},
+			},
+		},
+		{
 			"name":        "okf_search",
 			"description": "Search the OKF knowledge bundle for concepts by query terms, tags, and titles using in-memory BM25 scoring, or by file path via code_refs.",
 			"inputSchema": map[string]any{
@@ -452,10 +461,54 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 	if callParams.Arguments == nil {
 		callParams.Arguments = make(map[string]any)
 	}
+	if callParams.Name == "okf_init" {
+		if len(callParams.Arguments) != 0 {
+			s.sendToolResult(req.ID, "okf_init takes no arguments; its target is bound when the MCP server starts", true)
+			return
+		}
+		// 初始化目标由服务启动时绑定，并经过与其他工具相同的路径边界检查。
+		callParams.Arguments["bundle"] = s.bundleDir
+	}
 
 	bundleDir, err := s.resolveBundleDir(callParams)
 	if err != nil {
 		s.sendToolResult(req.ID, fmt.Sprintf("Path traversal denied: %v", err), true)
+		return
+	}
+	if callParams.Name == "okf_init" {
+		indexPath := filepath.Join(bundleDir, "index.md")
+		logPath := filepath.Join(bundleDir, "log.md")
+		_, indexErr := os.Lstat(indexPath)
+		_, logErr := os.Lstat(logPath)
+		if indexErr != nil && !os.IsNotExist(indexErr) {
+			s.sendToolResult(req.ID, fmt.Sprintf("Failed to inspect %q: %v", indexPath, indexErr), true)
+			return
+		}
+		if logErr != nil && !os.IsNotExist(logErr) {
+			s.sendToolResult(req.ID, fmt.Sprintf("Failed to inspect %q: %v", logPath, logErr), true)
+			return
+		}
+		if err := okf.InitBundle(bundleDir); err != nil {
+			s.sendToolResult(req.ID, fmt.Sprintf("Failed to initialize bundle in %q: %v", bundleDir, err), true)
+			return
+		}
+		initialized, err := okf.LoadBundle(bundleDir)
+		if err != nil {
+			s.sendToolResult(req.ID, fmt.Sprintf("Initialized bundle in %q, but loading failed: %v", bundleDir, err), true)
+			return
+		}
+		validation := okf.Validate(initialized, okf.ValidateOptions{Strict: true, Drift: true})
+		if !validation.IsConformant || !validation.GatePassed {
+			resultJSON, _ := json.Marshal(validation)
+			s.sendToolResult(req.ID, fmt.Sprintf("Bundle in %q is not valid: %s", bundleDir, resultJSON), true)
+			return
+		}
+		status := "already_initialized"
+		if os.IsNotExist(indexErr) || os.IsNotExist(logErr) {
+			status = "created"
+		}
+		resultJSON, _ := json.Marshal(map[string]string{"status": status, "bundle_path": bundleDir})
+		s.sendToolResult(req.ID, string(resultJSON), false)
 		return
 	}
 

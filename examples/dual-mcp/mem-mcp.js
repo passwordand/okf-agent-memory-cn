@@ -72,68 +72,96 @@ function resolveGlobal() {
   return realpath(GLOBAL_BUNDLE);
 }
 
-function resolveProject(projectRoot, startCwd) {
-  let bundle;
-  let start = startCwd;
-  if (projectRoot) {
-    const root = path.resolve(projectRoot);
-    start = root;
-    if (!fs.existsSync(path.join(root, "knowledge", "index.md"))) {
-      fail(2, `PROJECT_BUNDLE_NOT_FOUND: start=${root}`);
-    }
-    bundle = path.join(root, "knowledge");
-  } else {
-    bundle = findBundle(startCwd);
-    if (!bundle) fail(2, `PROJECT_BUNDLE_NOT_FOUND: start=${startCwd}`);
+function resolveProject(projectRoot, startCwd, globalBundle = GLOBAL_BUNDLE) {
+  const found = projectRoot ? null : findBundle(startCwd);
+  const root = realpath(path.resolve(projectRoot || (found ? path.dirname(found) : startCwd)));
+  const target = path.join(root, "knowledge");
+  let bundle = target;
+  let bundleInfo;
+  try {
+    bundleInfo = fs.lstatSync(target);
+  } catch (err) {
+    if (err.code !== "ENOENT") throw err;
   }
-  const real = realpath(bundle);
+  if (bundleInfo) {
+    if (!bundleInfo.isDirectory() && !bundleInfo.isSymbolicLink()) {
+      throw new Error(`PROJECT_BUNDLE_INVALID: ${target} is not a directory`);
+    }
+    try {
+      bundle = realpath(target);
+      if (!fs.statSync(bundle).isDirectory()) {
+        throw new Error(`PROJECT_BUNDLE_INVALID: ${target} is not a directory`);
+      }
+    } catch (err) {
+      if (err.code === "ENOENT") {
+        throw new Error(`PROJECT_BUNDLE_INVALID: ${target} is a broken link`);
+      }
+      throw err;
+    }
+  }
+  const relative = path.relative(root, bundle);
+  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw new Error(`PROJECT_SCOPE_REJECTED_OUTSIDE_ROOT: ${bundle}`);
+  }
   let globalReal;
   try {
-    globalReal = realpath(GLOBAL_BUNDLE);
+    globalReal = realpath(globalBundle);
   } catch {
-    globalReal = path.resolve(GLOBAL_BUNDLE);
+    globalReal = path.resolve(globalBundle);
   }
-  if (samePath(real, globalReal)) {
-    fail(2, `PROJECT_SCOPE_REJECTED_GLOBAL: ${real}`);
+  if (samePath(bundle, globalReal)) {
+    throw new Error(`PROJECT_SCOPE_REJECTED_GLOBAL: ${bundle}`);
   }
-  if (!fs.existsSync(path.join(real, "index.md"))) {
-    fail(2, `PROJECT_BUNDLE_NOT_FOUND: start=${start}`);
-  }
-  return real;
+  return { bundle, cwd: bundleInfo ? bundle : root };
 }
 
-const args = parseArgs(process.argv.slice(2));
-const startCwd = process.cwd();
-const bundle = args.scope === "global" ? resolveGlobal() : resolveProject(args.projectRoot, startCwd);
+if (require.main === module) {
+  const args = parseArgs(process.argv.slice(2));
+  const startCwd = process.cwd();
+  let resolved;
+  try {
+    if (args.scope === "global") {
+      const globalBundle = resolveGlobal();
+      resolved = { bundle: globalBundle, cwd: globalBundle };
+    } else {
+      resolved = resolveProject(args.projectRoot, startCwd);
+    }
+  } catch (err) {
+    fail(2, err.message);
+  }
+  const { bundle, cwd } = resolved;
 
-if (!fs.existsSync(OKF)) fail(2, `OKF_NOT_FOUND: ${OKF}`);
+  if (!fs.existsSync(OKF)) fail(2, `OKF_NOT_FOUND: ${OKF}`);
 
-process.stderr.write(
-  `okf-mcp scope=${args.scope} cwd=${startCwd} bundle=${bundle} root=${bundle}\n`,
-);
+  process.stderr.write(
+    `okf-mcp scope=${args.scope} cwd=${startCwd} bundle=${bundle} root=${bundle}\n`,
+  );
 
-const child = spawn(OKF, ["mcp", bundle], {
-  stdio: "inherit",
-  cwd: bundle,
-  env: { ...process.env, OKF_MCP_ROOT: bundle },
-  windowsHide: true,
-});
+  const child = spawn(OKF, ["mcp", bundle], {
+    stdio: "inherit",
+    cwd,
+    env: { ...process.env, OKF_MCP_ROOT: bundle },
+    windowsHide: true,
+  });
 
-function forward(signal) {
-  if (child.pid && !child.killed) {
-    try {
-      child.kill(signal);
-    } catch {
-      child.kill();
+  function forward(signal) {
+    if (child.pid && !child.killed) {
+      try {
+        child.kill(signal);
+      } catch {
+        child.kill();
+      }
     }
   }
+
+  process.on("SIGINT", () => forward("SIGINT"));
+  process.on("SIGTERM", () => forward("SIGTERM"));
+
+  child.on("error", (err) => fail(1, `OKF_SPAWN_FAILED: ${err.message}`));
+  child.on("exit", (code, signal) => {
+    if (signal) process.exit(1);
+    process.exit(code ?? 1);
+  });
 }
 
-process.on("SIGINT", () => forward("SIGINT"));
-process.on("SIGTERM", () => forward("SIGTERM"));
-
-child.on("error", (err) => fail(1, `OKF_SPAWN_FAILED: ${err.message}`));
-child.on("exit", (code, signal) => {
-  if (signal) process.exit(1);
-  process.exit(code ?? 1);
-});
+module.exports = { resolveProject };

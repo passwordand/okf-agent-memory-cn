@@ -8,3 +8,4 @@
 * [Safe Unknown Metadata Round-Trip](metadata-roundtrip.md) - Unknown frontmatter keys are serialized deterministically with safe quoting and JSON-compatible scalar and collection preservation.
 * [CLI Optional Path Boundary](cli-argument-boundary.md) - CLI commands consume an optional bundle or target path only from the first remaining argument, preserving all subsequent flag values.
 * [Governance vs. Execution Context and Code Binding](governance-model.md) - 3-tier epistemic governance model (constraint, hold, context) and code-to-knowledge binding via code_refs.
+* [显式初始化缺失的项目知识库](explicit-bundle-initialization.md) - 项目 MCP 可在知识库缺失时连接，只有显式调用无路径参数的 okf_init 或 CLI init 才创建受边界约束的 knowledge 知识库。

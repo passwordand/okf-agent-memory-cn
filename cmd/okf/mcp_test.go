@@ -88,8 +88,8 @@ func TestMCPHandshakeAndToolsList(t *testing.T) {
 		t.Fatalf("Expected result map in response 2, got %T", r2.Result)
 	}
 	tools, ok := r2Map["tools"].([]any)
-	if !ok || len(tools) != 6 {
-		t.Fatalf("Expected 6 tools in tools/list, got %v", r2Map["tools"])
+	if !ok || len(tools) != 7 {
+		t.Fatalf("Expected 7 tools in tools/list, got %v", r2Map["tools"])
 	}
 }
 
@@ -101,6 +101,7 @@ func TestMCPToolsListOutputSchemas(t *testing.T) {
 	// fail tools/call at runtime (object schema without structuredContent).
 	// See upstream issue #30.
 	wantTools := []string{
+		"okf_init",
 		"okf_search",
 		"okf_show",
 		"okf_validate",
@@ -123,6 +124,111 @@ func TestMCPToolsListOutputSchemas(t *testing.T) {
 		if !seen[name] {
 			t.Errorf("expected tool %q in getMCPTools()", name)
 		}
+	}
+}
+
+func TestMCPInitMissingBundleInSameSession(t *testing.T) {
+	bundleDir := filepath.Join(t.TempDir(), "knowledge")
+	before := runMCPConversation(t, bundleDir, []string{
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"okf_search","arguments":{"query":"demo"}}}`,
+	})
+	if len(before) != 3 {
+		t.Fatalf("初始化前响应数 = %d，期望 3", len(before))
+	}
+	searchResult := before[2].Result.(map[string]any)
+	if searchResult["isError"] != true {
+		t.Fatalf("缺库搜索应返回错误，得到: %+v", searchResult)
+	}
+	if _, err := os.Stat(bundleDir); !os.IsNotExist(err) {
+		t.Fatalf("握手和搜索不应自动创建知识库，得到: %v", err)
+	}
+
+	responses := runMCPConversation(t, bundleDir, []string{
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"okf_init","arguments":{}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"okf_search","arguments":{"query":"demo"}}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"okf_create","arguments":{"concept_id":"facts/demo","type":"Fact","title":"Demo","description":"A demo concept."}}}`,
+		`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"okf_create","arguments":{"concept_id":"facts/second","type":"Fact","title":"Second","description":"A related concept."}}}`,
+		`{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"okf_relate","arguments":{"source_id":"facts/demo","target_id":"facts/second","description":"Related facts"}}}`,
+		`{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"okf_validate","arguments":{"strict":true}}}`,
+		`{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"okf_init","arguments":{}}}`,
+	})
+	if len(responses) != 7 {
+		t.Fatalf("初始化后响应数 = %d，期望 7", len(responses))
+	}
+	for i, response := range responses {
+		result := response.Result.(map[string]any)
+		if result["isError"] == true {
+			t.Fatalf("第 %d 个工具调用失败: %+v", i, result)
+		}
+	}
+	for i, want := range []string{`"status":"created"`, `"status":"already_initialized"`} {
+		index := 0
+		if i == 1 {
+			index = 6
+		}
+		result := responses[index].Result.(map[string]any)
+		content := result["content"].([]any)[0].(map[string]any)["text"].(string)
+		if !strings.Contains(content, want) {
+			t.Fatalf("第 %d 次初始化缺少状态 %s: %s", i+1, want, content)
+		}
+	}
+	for _, name := range []string{"index.md", "log.md"} {
+		if _, err := os.Stat(filepath.Join(bundleDir, name)); err != nil {
+			t.Fatalf("初始化后缺少 %s: %v", name, err)
+		}
+	}
+}
+
+func TestMCPInitRejectsArgumentsAndOutsideRoot(t *testing.T) {
+	root := t.TempDir()
+	bundleDir := filepath.Join(root, "knowledge")
+	outside := filepath.Join(t.TempDir(), "outside")
+	requests := []string{
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"okf_init","arguments":{"bundle":"` + jsonPath(outside) + `"}}}`,
+	}
+	result := runMCPConversation(t, bundleDir, requests)[0].Result.(map[string]any)
+	if result["isError"] != true {
+		t.Fatalf("okf_init 不应接受路径参数: %+v", result)
+	}
+	if _, err := os.Stat(outside); !os.IsNotExist(err) {
+		t.Fatalf("路径参数不应创建外部目录: %v", err)
+	}
+
+	if err := os.Symlink(filepath.Dir(outside), bundleDir); err != nil {
+		t.Skipf("当前系统不能创建符号链接: %v", err)
+	}
+	result = runMCPConversation(t, bundleDir, []string{
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"okf_init","arguments":{}}}`,
+	})[0].Result.(map[string]any)
+	if result["isError"] != true {
+		t.Fatalf("指向边界外的符号链接应被拒绝: %+v", result)
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(outside), "index.md")); !os.IsNotExist(err) {
+		t.Fatalf("符号链接目标不应被写入: %v", err)
+	}
+}
+
+func TestMCPInitRejectsInvalidExistingBundle(t *testing.T) {
+	bundleDir := filepath.Join(t.TempDir(), "knowledge")
+	if err := os.Mkdir(bundleDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	indexPath := filepath.Join(bundleDir, "index.md")
+	invalidIndex := []byte("# 缺少 OKF 版本声明\n")
+	if err := os.WriteFile(indexPath, invalidIndex, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result := runMCPConversation(t, bundleDir, []string{
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"okf_init","arguments":{}}}`,
+	})[0].Result.(map[string]any)
+	if result["isError"] != true {
+		t.Fatalf("无效现有知识库应返回错误: %+v", result)
+	}
+	index, err := os.ReadFile(indexPath)
+	if err != nil || string(index) != string(invalidIndex) {
+		t.Fatalf("初始化不应覆盖无效的现有文件: %v, %q", err, index)
 	}
 }
 

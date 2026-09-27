@@ -16,6 +16,9 @@
 - 使用 gse 编译时嵌入词典，发布后的 exe 不依赖 Go 模块缓存路径；
 - 增加中文检索回归测试；
 - 提供 Windows PowerShell 构建脚本。
+- 新增 `okf_init` MCP 工具：项目库缺失时仍可连接，只有显式调用才创建 `knowledge/`；无参数 `okf init` 也固定创建当前目录的 `knowledge/`。
+
+`okf_init` 从 v0.3.1-cn.4 起提供预编译版本；使用双库方案时还需更新已安装的 `mem-mcp.js` wrapper。
 
 ## 验证状态
 

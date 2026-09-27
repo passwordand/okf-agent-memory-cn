@@ -25,6 +25,7 @@ const defaultOKFAgentsBlock = `<!-- BEGIN OKF AGENT MEMORY -->
 - NEVER scan ` + "`knowledge/`" + ` via ` + "`list_dir`" + `, ` + "`grep_search`" + `, ` + "`find`" + `, or raw file readers.
 - NEVER forge human verification (` + "`verified:`" + ` is human-only; declare ` + "`generated: { by: \"<actor>\", at: \"<iso-time>\" }`" + `).
 - PREFER native ` + "`okf_*`" + ` MCP tools OVER CLI fallback commands.
+- MUST call ` + "`okf_init()`" + ` only for an explicit user request to initialize a missing bundle; NEVER call it after a failed read.
 
 ### 2. Guard Clauses & Scope Governance
 - ON edit(@path/):

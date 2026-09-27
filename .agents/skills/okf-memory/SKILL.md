@@ -18,6 +18,7 @@ Teaches AI agents deterministic interaction with an Open Knowledge Format (OKF v
 - PREFER native `okf_*` MCP tools OVER CLI fallback commands.
 - PREFER `okf_update` OVER `okf_create` when mutating existing domain entities.
 - NEVER persist scratchpads, raw chain-of-thought, or speculative chatter to knowledge corpus.
+- Initialize a missing project bundle with `okf_init` only when the user explicitly asks to initialize memory; use `okf init knowledge` if MCP is unavailable. A failed read or search does not authorize initialization.
 
 ## 2. Guard Clauses & Scope Governance
 - ON edit(@path/):
@@ -43,6 +44,7 @@ Default bundle: `./knowledge`. For custom paths, pass `bundle="path/to/bundle"`.
 
 | Task | Preferred: Native MCP Tool | Fallback: Deterministic CLI (`--json`) |
 | :--- | :--- | :--- |
+| **Initialize Project Bundle** | `okf_init()` after an explicit user request | `okf init knowledge` |
 | **Search Knowledge** | `okf_search(query="<query>", limit=3)` | `okf search "<query>" knowledge --limit 3 --json` |
 | **Discover Code Constraints** | `okf_search(for_path="<file-path>")` | `okf search --for-path <file-path> knowledge --json` |
 | **Inspect Concept** | `okf_show(concept_id="<id>")` | `okf show <id> knowledge --json` |

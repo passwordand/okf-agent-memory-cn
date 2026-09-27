@@ -273,7 +273,7 @@ Usage:
   okf init [path]
 
 Arguments:
-  [path]                 Target directory to initialize (default: 'knowledge' or '.')
+  [path]                 Target directory to initialize (default: 'knowledge')
 
 Examples:
   okf init knowledge
@@ -311,7 +311,7 @@ Usage:
   okf mcp [bundle]
 
 Arguments:
-  [bundle]               Path to OKF bundle directory (default: 'knowledge' or '.')
+  [bundle]               Path to OKF bundle directory (default: 'knowledge', or '.' for an existing root bundle)
 
 Examples:
   okf mcp knowledge
@@ -350,10 +350,12 @@ Flags:
 }
 
 func defaultBundle(args []string) (string, []string) {
-	// Look for ./knowledge or default to current directory.
-	fallback := "."
+	// 优先使用项目库；保留现有根目录库；新项目默认绑定到 ./knowledge，供 MCP 显式初始化。
+	fallback := "knowledge"
 	if info, err := os.Stat("knowledge"); err == nil && info.IsDir() {
 		fallback = "knowledge"
+	} else if _, err := os.Stat("index.md"); err == nil {
+		fallback = "."
 	}
 	return splitOptionalPath(args, fallback)
 }
@@ -861,7 +863,7 @@ func cmdInit(args []string) {
 		printInitUsage()
 		return
 	}
-	bundleDir, _ := defaultBundle(args)
+	bundleDir, _ := splitOptionalPath(args, "knowledge")
 	if err := okf.InitBundle(bundleDir); err != nil {
 		fmt.Fprintf(os.Stderr, "Error initializing bundle: %v\n", err)
 		os.Exit(1)

@@ -68,8 +68,8 @@ cd okf-agent-memory-cn
 # 查看概念
 ./dist/okf-cn.exe show architecture/layers knowledge --json
 
-# 初始化一个新的 OKF 知识库
-./dist/okf-cn.exe init .\my-project\knowledge
+# 在当前项目创建 knowledge/；也可显式传入目标路径
+./dist/okf-cn.exe init
 
 # 启动 MCP 服务
 ./dist/okf-cn.exe mcp knowledge
@@ -83,8 +83,10 @@ cd okf-agent-memory-cn
 
 | MCP 条目 | 启动参数 | 默认 bundle | 用途 |
 |---|---|---|---|
-| `okf-project` | `--scope project` | 从进程 cwd 向上找最近的 `knowledge/index.md` | 当前项目进度、架构、决策 |
+| `okf-project` | `--scope project` | 优先找最近的 `knowledge/index.md`；缺库时绑定 cwd 下的 `knowledge/` | 当前项目进度、架构、决策 |
 | `okf-global` | `--scope global` | `~/.config/agent-memory/knowledge` | 通用偏好、跨项目约定 |
+
+项目库尚不存在时，`okf-project` 仍可连接；只有用户明确要求初始化，Agent 才调用 `okf_init()`。启动 MCP、搜索失败或缺少参数都不会自动创建文件。直接使用 CLI 时，运行 `okf init` 会在当前目录创建 `knowledge/`；`okf init .` 则显式在当前目录创建根级库。
 
 推荐目录：
 
@@ -99,10 +101,10 @@ cd okf-agent-memory-cn
 示例脚本：[examples/dual-mcp/mem-mcp.js](examples/dual-mcp/mem-mcp.js)。行为约定：
 
 1. 必须显式 `--scope project|global`；缺参或未知参数非零退出。
-2. 项目模式可用 `--project-root <绝对项目根>`，只检查该根下的 `knowledge/index.md`，不再向上搜。
-3. 找不到项目库时输出 `PROJECT_BUNDLE_NOT_FOUND` 并失败；**不创建库、不回退全局**。
+2. 项目模式可用 `--project-root <绝对项目根>` 固定目标；未指定时优先向上查找已有项目库，找不到则把进程 cwd 作为项目根，不依赖 Git。
+3. 项目库缺失时仅启动绑定到 `<项目根>/knowledge` 的 MCP 服务；调用 `okf_init()` 才创建库，不回退全局库。全局库缺失时仍报 `GLOBAL_BUNDLE_NOT_FOUND`。
 4. 项目模式若定位到全局库真实路径，输出 `PROJECT_SCOPE_REJECTED_GLOBAL` 并失败。
-5. 子进程执行 `okf mcp <bundle>`，并把 `OKF_MCP_ROOT` 设为该 bundle 的真实绝对路径；定位日志只写 stderr。
+5. 子进程执行 `okf mcp <bundle>`，并把 `OKF_MCP_ROOT` 限定为该 bundle 路径；缺库时工作目录设为项目根，已有库时设为 bundle 目录。定位日志只写 stderr。
 
 ### OpenCode
 

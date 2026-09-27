@@ -125,6 +125,7 @@ In settings, register the Model Context Protocol (MCP) server:
 * **Args**: `mcp`, `knowledge`
 
 The agent will automatically gain access to tools:
+* `okf_init`: Initialize a missing, server-bound bundle after an explicit user request
 * `okf_search`: BM25 semantic concept search
 * `okf_show`: Retrieve full concept details and link graphs
 * `okf_create`: Create new concepts with bookkeeping
@@ -133,6 +134,8 @@ The agent will automatically gain access to tools:
 * `okf_validate`: Audit corpus conformance
 
 A single `okf mcp knowledge` process is bound to one root. To keep a project bundle and a user-global bundle available at the same time (especially across Windows drive letters), run two MCP entries via [examples/dual-mcp/mem-mcp.js](../../examples/dual-mcp/mem-mcp.js). See the dual-wrapper section in the [root README](../../README.md).
+
+The project wrapper can connect before `knowledge/` exists. Without `--project-root`, it uses the current working directory when no bundle is found. It never creates a bundle on startup or after a failed read; the agent must explicitly call `okf_init`. The global wrapper still requires an existing global bundle.
 
 ### Gemini CLI / Codex
 

@@ -1,3 +1,11 @@
+## 2026-09-27
+* **Update**: Updated concept `progress/current.md`.
+* **Update**: Linked `progress/current.md` to `architecture/explicit-bundle-initialization.md` (当前实现进度对应显式知识库初始化的架构决定。).
+* **Creation**: Documented concept `progress/current.md` (当前项目进度).
+* **Update**: Linked `architecture/explicit-bundle-initialization.md` to `architecture/security-boundaries.md` (初始化路径继承 MCP 根目录和符号链接边界约束。).
+* **Update**: Linked `architecture/explicit-bundle-initialization.md` to `architecture/tooling-decision.md` (显式初始化扩展现有 Go CLI 与 MCP 双接口能力。).
+* **Creation**: Documented concept `architecture/explicit-bundle-initialization.md` (显式初始化缺失的项目知识库).
+
 ## 2026-09-16
 * **Release**: Published version v0.3.1 — Dual-Memory Agent Architecture (DMAA) empirical benchmark suite (`okf-benchmark`), CLI subcommand help handlers (`okf <subcommand> --help`), pre-flight GPU warmup ping, automated Mermaid diagram sanitizer, AAG v0.1 skill refactoring, and mutation performance hardening.
 

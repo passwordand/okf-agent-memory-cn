@@ -12,9 +12,10 @@ Welcome to the **{{PROJECT_NAME}}** repository. Define domain-specific behaviora
 <!-- BEGIN OKF AGENT MEMORY -->
 ## 1. Behavioral Invariants & Constraints (RFC 2119)
 - MUST execute `okf_search(query=keywords, limit=3)` before proposing architecture, new dependencies, or substantial changes.
-- NEVER scan `knowledge/` via `list_dir`, `grep_search`, `find`, or raw file readers.
+- NEVER scan `knowledge/` with raw file readers or directory tools.
 - NEVER forge human verification (`verified:` is human-only; declare `generated: { by: "<actor>", at: "<iso-time>" }`).
-- PREFER native `okf_*` MCP tools OVER CLI fallback commands.
+- PREFER `okf_*` MCP tools to CLI commands.
+- MUST call `okf_init()` only for an explicit user request to initialize a missing bundle; NEVER call it after a failed read.
 
 ## 2. Guard Clauses & Scope Governance
 - ON edit(@path/):

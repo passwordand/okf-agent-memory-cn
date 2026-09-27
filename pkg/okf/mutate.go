@@ -22,29 +22,75 @@ func titleCase(s string) string {
 	return string(r)
 }
 
-// InitBundle initializes a new OKF v0.2 bundle with root index.md and log.md.
+// InitBundle 创建 OKF v0.2 知识库的 index.md 和 log.md，并保留已有文件。
 func InitBundle(dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
+	dirInfo, err := os.Lstat(dir)
+	if err != nil {
+		return fmt.Errorf("failed to inspect bundle directory: %w", err)
+	}
+	if dirInfo.Mode()&os.ModeSymlink != 0 || !dirInfo.IsDir() {
+		return fmt.Errorf("bundle path must be a directory, not a symlink: %s", dir)
+	}
 
 	rootIndex := filepath.Join(dir, "index.md")
-	if _, err := os.Stat(rootIndex); os.IsNotExist(err) {
-		indexContent := "---\nokf_version: \"0.2\"\n---\n\n# Knowledge Base\n\n"
-		if err := os.WriteFile(rootIndex, []byte(indexContent), 0o644); err != nil {
-			return fmt.Errorf("failed to write root index.md: %w", err)
-		}
-	}
-
 	logFile := filepath.Join(dir, "log.md")
-	if _, err := os.Stat(logFile); os.IsNotExist(err) {
-		today := time.Now().UTC().Format("2006-01-02")
-		logContent := fmt.Sprintf("## %s\n* **Creation**: Initialized OKF v0.2 knowledge bundle.\n", today)
-		if err := os.WriteFile(logFile, []byte(logContent), 0o644); err != nil {
-			return fmt.Errorf("failed to write log.md: %w", err)
+	for _, file := range []string{rootIndex, logFile} {
+		info, err := os.Lstat(file)
+		if err == nil && (info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular()) {
+			return fmt.Errorf("bundle file must be a regular file, not a symlink: %s", file)
+		}
+		if err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to inspect bundle file %s: %w", file, err)
 		}
 	}
 
+	indexContent := "---\nokf_version: \"0.2\"\n---\n\n# Knowledge Base\n\n"
+	if err := writeBundleFileIfAbsent(rootIndex, []byte(indexContent)); err != nil {
+		return fmt.Errorf("failed to write root index.md: %w", err)
+	}
+	today := time.Now().UTC().Format("2006-01-02")
+	logContent := fmt.Sprintf("## %s\n* **Creation**: Initialized OKF v0.2 knowledge bundle.\n", today)
+	if err := writeBundleFileIfAbsent(logFile, []byte(logContent)); err != nil {
+		return fmt.Errorf("failed to write log.md: %w", err)
+	}
+	bundle, err := LoadBundle(dir)
+	if err != nil {
+		return fmt.Errorf("failed to load initialized bundle: %w", err)
+	}
+	if bundle.DeclaredVer != "0.2" {
+		return fmt.Errorf("root index.md must declare okf_version: \"0.2\"")
+	}
+
+	return nil
+}
+
+func writeBundleFileIfAbsent(file string, content []byte) error {
+	f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if os.IsExist(err) {
+		info, inspectErr := os.Lstat(file)
+		if inspectErr != nil {
+			return inspectErr
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return fmt.Errorf("bundle file must be a regular file, not a symlink: %s", file)
+		}
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if _, err = f.Write(content); err != nil {
+		_ = f.Close()
+		_ = os.Remove(file)
+		return err
+	}
+	if err = f.Close(); err != nil {
+		_ = os.Remove(file)
+		return err
+	}
 	return nil
 }
 
