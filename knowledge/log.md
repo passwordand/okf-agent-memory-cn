@@ -1,4 +1,7 @@
 ## 2026-09-27
+* **Update**: Updated concept `progress/current.md`.
+
+## 2026-09-27
 * **Update**: Updated concept `roadmap/milestones.md`.
 * **Update**: Updated concept `roadmap/milestones.md`.
 * **Update**: Updated concept `progress/current.md`.

@@ -1,2 +1,2 @@
 # Progress
-* [当前项目进度](current.md) - 上游稳定版 v0.4.3 已在本地集成，保留中文 gse、显式 okf_init、CLI 默认 knowledge 和双库 wrapper；验证通过，待决定发布。
+* [当前项目进度](current.md) - v0.4.3-cn.1 已发布；上游 v0.4.3 与中文检索、显式初始化及双库 wrapper 完成集成，本机四套 Agent 已切换到新版。
