@@ -1,5 +1,6 @@
 ## 2026-09-27
 * **Update**: Updated concept `progress/current.md`.
+* **Update**: Updated concept `progress/current.md`.
 * **Update**: Linked `progress/current.md` to `architecture/explicit-bundle-initialization.md` (当前实现进度对应显式知识库初始化的架构决定。).
 * **Creation**: Documented concept `progress/current.md` (当前项目进度).
 * **Update**: Linked `architecture/explicit-bundle-initialization.md` to `architecture/security-boundaries.md` (初始化路径继承 MCP 根目录和符号链接边界约束。).

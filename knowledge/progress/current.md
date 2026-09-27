@@ -1,17 +1,17 @@
 ---
 type: Status
 title: 当前项目进度
-description: 显式 okf_init 与 CLI、双库 wrapper 已实现并完成本地回归验证，正在发布 v0.3.1-cn.4。
-generated: { by: agent/mcp, at: "2026-09-27T14:49:55Z" }
+description: v0.3.1-cn.4 已发布到 GitHub，新增显式 okf_init、CLI 默认知识库路径与双库 wrapper 缺库接入。
+generated: { by: agent/mcp, at: "2026-09-27T14:54:09Z" }
 ---
 
 # 当前项目进度
 
 ## 2026-09-27
 
-已实现 `okf_init()`：项目知识库不存在时 MCP 可连接；只有用户明确要求后，Agent 才调用该工具初始化。无参数 `okf init` 创建 `./knowledge/`，双库 wrapper 在非 Git 项目中以工作目录定位缺失项目库。
+`v0.3.1-cn.4` 已发布到 https://github.com/passwordand/okf-agent-memory-cn/releases/tag/v0.3.1-cn.4。版本包含显式 `okf_init()`、无参数 `okf init` 默认创建 `./knowledge/`、双库 wrapper 在非 Git 项目中接入缺失项目库，以及相应 Agent 指引、文档和回归测试。项目库与全局库继续隔离，读取和连接不会自动初始化。
 
-`v0.3.1-cn.4` 发布内容与说明已准备，正在提交、推送并等待 GitHub CI 与 Release。新增 CLI、MCP、wrapper 的回归测试及同连接端到端调用通过；`go vet`、Skill 模板同步检查和 OKF 严格校验通过。Windows 本地完整 Go 测试仍受旧有 symlink 权限及 MCP 对抗用例的路径转义兼容问题影响，需以 Ubuntu CI 复核。`govulncheck` 因本机无法连接 Go 模块代理而未运行；已按项目安全审查清单人工检查本版路径与 symlink 边界。
+发布提交为 `8a4d278`。GitHub Ubuntu CI 与 Release 工作流均通过；Release 包含 6 个平台二进制、2 个 starter pack、校验和及 Homebrew Formula。新增 CLI、MCP、wrapper 的本地回归测试、`go vet`、Skill 模板同步检查和 OKF 严格校验也通过（20 个概念，0 错误，0 警告）。Windows 本地完整 Go 测试仍受旧有 symlink 权限及 MCP 对抗用例的路径转义兼容问题影响；Ubuntu CI 已完整通过。`govulncheck` 因本机无法连接 Go 模块代理而未运行，已按项目安全清单人工检查本版路径与 symlink 边界。
 
 # Related Concepts
-- [显式初始化缺失的项目知识库](../architecture/explicit-bundle-initialization.md): 当前发布实现对应显式知识库初始化的架构决定。
+- [显式初始化缺失的项目知识库](../architecture/explicit-bundle-initialization.md): 本次版本对应的架构决定。
