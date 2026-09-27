@@ -1,4 +1,9 @@
 ## 2026-09-27
+* **Update**: Updated concept `research/upstream-v0-4-3-compatibility.md`.
+* **Update**: Updated concept `progress/current.md`.
+* **Update**: Linked `research/upstream-v0-4-3-compatibility.md` to `architecture/search-tokenization.md` (上游 Unicode 连续词分割会使本分支的中文分词检索退化，移植时需保留 gse 实现。).
+* **Update**: Linked `research/upstream-v0-4-3-compatibility.md` to `architecture/explicit-bundle-initialization.md` (上游升级必须保留显式 okf_init 与缺库可连接的项目库行为。).
+* **Creation**: Documented concept `research/upstream-v0-4-3-compatibility.md` (上游 v0.4.3 与中文检索版兼容性审查).
 * **Update**: Updated concept `progress/current.md`.
 * **Update**: Updated concept `progress/current.md`.
 * **Update**: Linked `progress/current.md` to `architecture/explicit-bundle-initialization.md` (当前实现进度对应显式知识库初始化的架构决定。).

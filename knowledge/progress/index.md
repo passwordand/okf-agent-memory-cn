@@ -1,2 +1,2 @@
 # Progress
-* [当前项目进度](current.md) - v0.3.1-cn.4 已发布到 GitHub，新增显式 okf_init、CLI 默认知识库路径与双库 wrapper 缺库接入。
+* [当前项目进度](current.md) - v0.3.1-cn.4 已发布；上游 v0.4.3 兼容性审查发现不能直接替换，迁移需保留中文分词与 okf_init。
