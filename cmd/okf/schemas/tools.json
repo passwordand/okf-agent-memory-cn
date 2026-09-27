@@ -1,0 +1,487 @@
+[
+  {
+    "name": "okf_init",
+    "description": "Initialize the server-bound OKF bundle only after an explicit request. Creates index.md and log.md without overwriting existing files; takes no path arguments.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "description": "Initialization status and the server-bound bundle path.",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["created", "already_initialized"]
+        },
+        "bundle_path": {
+          "type": "string"
+        }
+      },
+      "required": ["status", "bundle_path"]
+    }
+  },
+  {
+    "name": "okf_search",
+    "description": "Search the OKF knowledge bundle for concepts by query terms, tags, and titles using in-memory BM25 scoring, or by file path via code_refs.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search terms to find matching concepts."
+        },
+        "for_path": {
+          "type": "string",
+          "description": "Optional file or directory path to find governing concepts via code_refs (e.g. 'pkg/okf/types.go')."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of results (default 10)."
+        },
+        "bundle": {
+          "type": "string",
+          "description": "Optional path to the OKF knowledge bundle directory (defaults to 'knowledge' or project bundle)."
+        }
+      },
+      "required": []
+    },
+    "outputSchema": {
+      "type": "object",
+      "description": "Ranked matches envelope.",
+      "properties": {
+        "results": {
+          "type": "array",
+          "description": "Ranked search results.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "concept_id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "governance": {
+                "type": "string",
+                "description": "Agent authority level: constraint | hold | context."
+              },
+              "code_refs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Source paths or globs this concept governs."
+              },
+              "score": {
+                "type": "number"
+              },
+              "matched_on": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "inbound": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "outbound": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "concept_id",
+              "title",
+              "type",
+              "description",
+              "score",
+              "matched_on"
+            ]
+          }
+        }
+      },
+      "required": [
+        "results"
+      ]
+    }
+  },
+  {
+    "name": "okf_show",
+    "description": "Show the full content, frontmatter, and relationships of a specific concept.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "concept_id": {
+          "type": "string",
+          "description": "The concept ID (e.g. 'architecture/layers')."
+        },
+        "bundle": {
+          "type": "string",
+          "description": "Optional path to the OKF knowledge bundle directory (defaults to 'knowledge' or project bundle)."
+        }
+      },
+      "required": [
+        "concept_id"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "description": "The concept record (frontmatter fields plus body).",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "type": "string"
+        },
+        "stale_after": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string",
+          "description": "Markdown body after frontmatter."
+        },
+        "governance": {
+          "type": "string",
+          "description": "Agent authority level: constraint | hold | context."
+        },
+        "code_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Source paths or globs this concept governs."
+        }
+      },
+      "required": [
+        "id",
+        "path",
+        "type"
+      ]
+    }
+  },
+  {
+    "name": "okf_validate",
+    "description": "Validate the entire OKF bundle for conformance, broken links, orphans, and description drift.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "strict": {
+          "type": "boolean",
+          "description": "Treat connectivity warnings and trust gaps as errors."
+        },
+        "stale": {
+          "type": "boolean",
+          "description": "Fail if any concepts have reached their stale_after date."
+        },
+        "bundle": {
+          "type": "string",
+          "description": "Optional path to the OKF knowledge bundle directory (defaults to 'knowledge' or project bundle)."
+        }
+      },
+      "required": []
+    },
+    "outputSchema": {
+      "type": "object",
+      "description": "Validation report for the bundle.",
+      "properties": {
+        "bundle_path": {
+          "type": "string"
+        },
+        "declared_version": {
+          "type": "string",
+          "description": "OKF version declared by the bundle."
+        },
+        "concept_count": {
+          "type": "integer"
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "gate_findings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Diagnostics from governance/code_refs gates."
+        },
+        "broken_links": {
+          "type": "array",
+          "description": "Graph integrity findings.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "source_concept": {
+                "type": "string"
+              },
+              "target_href": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source_concept",
+              "target_href",
+              "reason"
+            ]
+          }
+        },
+        "orphans": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "stale_count": {
+          "type": "integer"
+        },
+        "is_conformant": {
+          "type": "boolean"
+        },
+        "gate_passed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "bundle_path",
+        "concept_count",
+        "errors",
+        "warnings",
+        "is_conformant",
+        "gate_passed"
+      ]
+    }
+  },
+  {
+    "name": "okf_create",
+    "description": "Create a new concept with frontmatter and automatic bookkeeping (updating log.md and parent index.md).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "concept_id": {
+          "type": "string",
+          "description": "Path without .md (e.g. 'decisions/auth-flow')."
+        },
+        "type": {
+          "type": "string",
+          "description": "The concept type (e.g. 'Decision', 'Fact', 'Process')."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable title."
+        },
+        "description": {
+          "type": "string",
+          "description": "One sentence summary of the concept."
+        },
+        "body": {
+          "type": "string",
+          "description": "Markdown body content."
+        },
+        "bundle": {
+          "type": "string",
+          "description": "Optional path to the OKF knowledge bundle directory (defaults to 'knowledge' or project bundle)."
+        }
+      },
+      "required": [
+        "concept_id",
+        "type",
+        "title",
+        "description"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "description": "Creation confirmation and metadata.",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "concept_id": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "bundle": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "success",
+        "concept_id",
+        "path",
+        "message"
+      ]
+    }
+  },
+  {
+    "name": "okf_update",
+    "description": "Update an existing concept's title, description, or body with automatic log.md bookkeeping.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "concept_id": {
+          "type": "string",
+          "description": "Path without .md (e.g. 'decisions/auth-flow')."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Updated human-readable title."
+        },
+        "description": {
+          "type": "string",
+          "description": "Updated one-sentence summary."
+        },
+        "body": {
+          "type": "string",
+          "description": "Updated markdown body content."
+        },
+        "bundle": {
+          "type": "string",
+          "description": "Optional path to the OKF knowledge bundle directory (defaults to 'knowledge' or project bundle)."
+        }
+      },
+      "required": [
+        "concept_id"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "description": "Update confirmation and metadata.",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "concept_id": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "bundle": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "success",
+        "concept_id",
+        "path",
+        "message"
+      ]
+    }
+  },
+  {
+    "name": "okf_relate",
+    "description": "Connect two concepts with a relative link and context description.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "description": "Source concept ID."
+        },
+        "target_id": {
+          "type": "string",
+          "description": "Target concept ID."
+        },
+        "description": {
+          "type": "string",
+          "description": "Context description explaining the relationship."
+        },
+        "bundle": {
+          "type": "string",
+          "description": "Optional path to the OKF knowledge bundle directory (defaults to 'knowledge' or project bundle)."
+        }
+      },
+      "required": [
+        "source_id",
+        "target_id"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "description": "Relationship confirmation and metadata.",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "source_id": {
+          "type": "string"
+        },
+        "target_id": {
+          "type": "string"
+        },
+        "bundle": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "success",
+        "source_id",
+        "target_id",
+        "message"
+      ]
+    }
+  }
+]

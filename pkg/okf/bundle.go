@@ -53,7 +53,7 @@ func ensureWithinRoot(rootDir, targetPath string) (string, error) {
 	}
 
 	cleanTarget := strings.ReplaceAll(targetPath, "\\", "/")
-	if filepath.IsAbs(targetPath) {
+	if IsAbsPath(targetPath) {
 		cleanTarget = filepath.Clean(cleanTarget)
 	} else {
 		cleanTarget = path.Join(filepath.ToSlash(realRoot), cleanTarget)
@@ -316,6 +316,35 @@ func (b *Bundle) buildGraph() {
 			} else {
 				b.BrokenLinks = append(b.BrokenLinks, BrokenLink{
 					SourceConcept: concept.Path,
+					TargetHref:    href,
+					Reason:        "target concept does not exist",
+				})
+			}
+		}
+	}
+
+	// Also check for broken links inside directory indexes (index.md)
+	for idxPath, idxContent := range b.Indexes {
+		body := StripFences(idxContent)
+		matches := linkRegex.FindAllStringSubmatch(body, -1)
+
+		for _, match := range matches {
+			href := match[1]
+			if strings.Contains(href, "://") {
+				continue // External URL
+			}
+
+			targetID := b.ResolveLink(idxPath, href)
+			targetRel := targetID + ".md"
+			targetBase := path.Base(targetRel)
+
+			if strings.EqualFold(targetBase, "index.md") || strings.EqualFold(targetRel, "log.md") || strings.EqualFold(targetRel, "AGENTS.md") {
+				continue // Reserved files in indexes are standard navigation
+			}
+
+			if _, exists := b.Concepts[targetID]; !exists {
+				b.BrokenLinks = append(b.BrokenLinks, BrokenLink{
+					SourceConcept: idxPath,
 					TargetHref:    href,
 					Reason:        "target concept does not exist",
 				})

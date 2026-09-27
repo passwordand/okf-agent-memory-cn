@@ -536,8 +536,8 @@ func TestBootstrap(t *testing.T) {
 func TestBootstrapExistingAGENTS_SmartAppend(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// 1. Create pre-existing AGENTS.md with user-defined coding rules
-	userOriginalContent := "# Custom Team Rules\n\n1. Always run npm test before committing.\n2. Use React 19.\n"
+	// 1. Create pre-existing AGENTS.md with user-defined coding rules and mention of OKF in header
+	userOriginalContent := "# Custom Team Rules\n\n> Powered by [OKF Agent Memory](https://github.com/okf-memory/okf-agent-memory) — Open Knowledge Format (OKF)\n\n1. Always run npm test before committing.\n2. Use React 19.\n"
 	agentsMDPath := filepath.Join(tmpDir, "AGENTS.md")
 	if err := os.WriteFile(agentsMDPath, []byte(userOriginalContent), 0o644); err != nil {
 		t.Fatalf("Failed to write initial custom AGENTS.md: %v", err)
@@ -557,7 +557,7 @@ func TestBootstrapExistingAGENTS_SmartAppend(t *testing.T) {
 	}
 	content := string(data)
 
-	if !strings.HasPrefix(content, "# Custom Team Rules\n\n1. Always run npm test before committing.") {
+	if !strings.HasPrefix(content, "# Custom Team Rules\n\n> Powered by [OKF Agent Memory]") {
 		t.Errorf("Existing user rules were overwritten or destroyed: %s", content)
 	}
 	if !strings.Contains(content, "<!-- BEGIN OKF AGENT MEMORY -->") {

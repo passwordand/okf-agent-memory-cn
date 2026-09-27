@@ -151,9 +151,7 @@ func Bootstrap(targetDir string, opts BootstrapOptions) error {
 			existingData, err := os.ReadFile(agentsMDPath)
 			if err == nil {
 				existingStr := string(existingData)
-				if !strings.Contains(existingStr, "BEGIN OKF AGENT MEMORY") &&
-					!strings.Contains(existingStr, "okf-agent-memory") &&
-					!strings.Contains(existingStr, "Open Knowledge Format (OKF)") {
+				if !strings.Contains(existingStr, "BEGIN OKF AGENT MEMORY") {
 					newContent := strings.TrimRight(existingStr, "\n") + "\n\n" + defaultOKFAgentsBlock
 					// #nosec G703 -- agentsMDPath is constructed directly within targetDir
 					_ = os.WriteFile(agentsMDPath, []byte(newContent), 0o644)

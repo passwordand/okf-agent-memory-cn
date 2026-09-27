@@ -1,4 +1,10 @@
 ## 2026-09-27
+* **Update**: Updated concept `roadmap/milestones.md`.
+* **Update**: Updated concept `roadmap/milestones.md`.
+* **Update**: Updated concept `progress/current.md`.
+* **Update**: Linked `architecture/upstream-v0-4-3-integration.md` to `architecture/search-tokenization.md` (升级后保留 gse 中文检索行为).
+* **Update**: Linked `architecture/upstream-v0-4-3-integration.md` to `architecture/explicit-bundle-initialization.md` (升级后继续执行显式初始化约束).
+* **Creation**: Documented concept `architecture/upstream-v0-4-3-integration.md` (上游 v0.4.3 与中文记忆功能的集成决定).
 * **Update**: Updated concept `research/upstream-v0-4-3-compatibility.md`.
 * **Update**: Updated concept `progress/current.md`.
 * **Update**: Linked `research/upstream-v0-4-3-compatibility.md` to `architecture/search-tokenization.md` (上游 Unicode 连续词分割会使本分支的中文分词检索退化，移植时需保留 gse 实现。).

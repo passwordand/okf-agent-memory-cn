@@ -233,3 +233,63 @@ With no path, MCP uses `./knowledge/` for a new project and continues to use `.`
 | `okf_update` | `id`, `title`, `description`, `body` | Update existing concept and record in log.md. |
 | `okf_relate` | `source_id`, `target_id`, `description` | Link two concepts together. |
 | `okf_validate` | `strict` (bool), `stale` (bool) | Verify bundle conformance, including description drift. |
+
+Successful tool calls return `structuredContent` matching an object `outputSchema`. Errors return `isError`.
+
+---
+
+### 10. `hub`
+
+Manages zero-knowledge end-to-end encrypted synchronization with the OKF Memory Hub and runs the embedded CAS server for self-hosting.
+
+```bash
+okf hub <subcommand> [arguments] [flags]
+```
+
+#### Authentication & URL Resolution
+All hub commands (`push`, `pull`, `sync`, `init-vault`) support optional Bearer token authentication:
+- **CLI Flag:** `-auth-token <token>` (highest precedence)
+- **Environment Variable:** `OKF_HUB_TOKEN` (fallback)
+- **Vault Configuration:** `auth_token` in `.okf-vault.json` (stored fallback)
+
+The remote hub URL is resolved in order:
+- **CLI Flag:** `-hub <url>`
+- **Vault Configuration:** `hub_url` in `.okf-vault.json`
+- **Default:** `http://127.0.0.1:8080`
+
+#### Subcommands
+
+##### A. `init-vault`
+Initializes a new zero-knowledge vault, derives a 128-bit Secret Key, writes `.okf-vault.json`, and prints the Emergency Kit.
+
+```bash
+okf hub init-vault [bundle-path] [-hub <url>] [-auth-token <token>]
+```
+
+##### B. `push`
+Detects local bundle changes via `plaintext_hash`, encrypts modified files into binary AES-256-GCM envelopes, deduplicates against remote CAS (`/blobs/check-missing`), uploads missing blobs, and advances the remote vault head.
+
+```bash
+okf hub push [bundle-path] [-hub <url>] [-auth-token <token>] [-password <pass>] [-secret-key <key>] [-message <msg>]
+```
+
+##### C. `pull`
+Fetches the latest remote commit and tree manifest, downloads new ciphertext blobs from CAS, decrypts them locally into RAM, and updates files on disk.
+
+```bash
+okf hub pull [bundle-path] [-hub <url>] [-auth-token <token>] [-password <pass>] [-secret-key <key>]
+```
+
+##### D. `sync`
+Performs a full two-way synchronization cycle (Pull + Push). If an HTTP 409 conflict occurs (concurrent updates), the 3-way reconcile engine automatically fast-forwards disjoint changes or preserves conflicting files locally as `<file>.conflict-local.md` without data loss.
+
+```bash
+okf hub sync [bundle-path] [-hub <url>] [-auth-token <token>] [-password <pass>] [-secret-key <key>] [-message <msg>]
+```
+
+##### E. `serve`
+Runs the embedded blind CAS and atomic head pointer server locally on the specified port.
+
+```bash
+okf hub serve [-port 8080] [-storage <dir>]
+```

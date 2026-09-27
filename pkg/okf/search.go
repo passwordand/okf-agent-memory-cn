@@ -3,7 +3,6 @@ package okf
 import (
 	"math"
 	"path"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -227,8 +226,8 @@ func (b *Bundle) Search(query string, limit int) []SearchResult {
 // Supports exact paths, directory prefixes, standard globs (path.Match), and recursive ** wildcards.
 // It also seamlessly handles absolute paths (e.g. /workspace/pkg/okf/types.go).
 func matchCodeRef(ref, target string) bool {
-	ref = filepath.ToSlash(strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(ref), "."), "/"))
-	target = filepath.ToSlash(strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(target), "."), "/"))
+	ref = strings.ReplaceAll(strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(ref), "."), "/"), "\\", "/")
+	target = strings.ReplaceAll(strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(target), "."), "/"), "\\", "/")
 	if ref == "" || target == "" {
 		return false
 	}
@@ -307,7 +306,7 @@ func (b *Bundle) SearchForPath(targetPath, query string, limit int) []SearchResu
 	for _, c := range b.Concepts {
 		for _, ref := range c.CodeRefs {
 			if matchCodeRef(ref, targetPath) {
-				exact := filepath.ToSlash(strings.TrimPrefix(ref, "./")) == filepath.ToSlash(strings.TrimPrefix(targetPath, "./"))
+				exact := strings.ReplaceAll(strings.TrimPrefix(ref, "./"), "\\", "/") == strings.ReplaceAll(strings.TrimPrefix(targetPath, "./"), "\\", "/")
 				matchedCandidates = append(matchedCandidates, candidate{
 					concept:    c,
 					exactMatch: exact,

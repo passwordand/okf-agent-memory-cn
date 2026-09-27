@@ -8,7 +8,7 @@ Thank you for your interest in contributing to **OKF Agent Memory**! We welcome 
 
 Before submitting code or documentation, please keep our core tenets in mind:
 
-1. **Zero External Dependencies**: The Go core library and CLI (`pkg/okf`, `cmd/okf`) must remain 100% zero-dependency, relying strictly on the Go standard library.
+1. **Zero Third-Party Dependencies**: The core Go library (`pkg/okf`) must remain 100% zero-dependency, relying strictly on the Go standard library. For zero-knowledge cryptographic primitives (`pkg/vault`), only official Go project sub-repositories (`golang.org/x/crypto`) are permitted. External third-party frameworks, vendor libraries, and CGo dependencies are strictly prohibited.
 2. **Strict Spec Conformance**: All knowledge structures must comply with the [OKF v0.2 Specification](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md).
 3. **Walk the Talk (Memory First)**: Any pull request introducing architectural decisions, CLI commands, or workflow conventions must update `knowledge/` and pass validation.
 

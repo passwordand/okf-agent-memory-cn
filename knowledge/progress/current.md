@@ -1,18 +1,21 @@
 ---
 type: Status
 title: 当前项目进度
-description: v0.3.1-cn.4 已发布；上游 v0.4.3 兼容性审查发现不能直接替换，迁移需保留中文分词与 okf_init。
-generated: { by: agent/mcp, at: "2026-09-27T15:16:26Z" }
+description: 上游稳定版 v0.4.3 已在本地集成，保留中文 gse、显式 okf_init、CLI 默认 knowledge 和双库 wrapper；验证通过，待决定发布。
+generated: { by: agent/mcp, at: "2026-09-27T15:43:33Z" }
 ---
 
 # 当前项目进度
 
 ## 2026-09-27
 
-`v0.3.1-cn.4` 已发布到 https://github.com/passwordand/okf-agent-memory-cn/releases/tag/v0.3.1-cn.4，发布提交为 `8a4d278`。GitHub Ubuntu CI 与 Release 工作流通过，10 个下载资产已上传。该版包含显式 `okf_init()`、CLI 默认 `./knowledge/`、双库 wrapper 缺库接入以及相应测试与文档。
+`v0.3.1-cn.4` 已发布到 https://github.com/passwordand/okf-agent-memory-cn/releases/tag/v0.3.1-cn.4，发布提交为 `8a4d278`。
 
-已审查上游稳定版 `v0.4.3`（相对共同基线 `v0.3.1` 新增 49 个提交）和默认分支 `develop`（比稳定版多 4 个提交）。结论：OKF v0.2 知识库可互相加载，但不能直接换用上游二进制或无冲突合并。上游没有 `okf_init` 和中文 `gse` 分词；其严格校验对本项目根索引的 `--help.md` 给出一条断链，gate 未通过。上游要求 Go 1.26，并改变 MCP 的 schema / structuredContent；`develop` 还搬迁 CLI 和 MCP 包。详细证据见兼容性审查概念。下一步如决定跟进上游，宜从稳定版 `v0.4.3` 移植并逐项回归。
+本地分支 `codex/upgrade-upstream-v0.4.3` 已在升级前建立检查点提交 `8f30f0c`。现已将上游稳定版 `v0.4.3` 的源码、vault / Hub、MCP `outputSchema` 与 `structuredContent` 及安全修复合入，同时保留 `gse` 中文分词、显式 `okf_init()`、CLI 默认 `knowledge/` 和双库 wrapper。清理了根索引遗留的 `--help.md` 断链。
+
+Go 1.26 下除两项需要 Windows 符号链接权限的测试外，全部 Go 测试通过；Node wrapper 6 项通过，`go vet ./...` 与 `okf validate knowledge --strict --drift` 通过。当前升级尚未提交、推送或发布；后续如发布，需确定本分支新版本号并运行发布流程。
 
 # Related Concepts
-- [显式初始化缺失的项目知识库](../architecture/explicit-bundle-initialization.md): 当前发行版的架构决定。
-- [上游 v0.4.3 与中文检索版兼容性审查](../research/upstream-v0-4-3-compatibility.md): 升级的兼容性证据与风险。
+- [显式初始化缺失的项目知识库](../architecture/explicit-bundle-initialization.md): 当前发行版的显式初始化架构决定。
+- [上游 v0.4.3 与中文检索版兼容性审查](../research/upstream-v0-4-3-compatibility.md): 升级前的兼容性证据。
+- [上游 v0.4.3 与中文记忆功能的集成决定](../architecture/upstream-v0-4-3-integration.md): 本地升级实施决定。

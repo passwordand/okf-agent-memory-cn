@@ -1,6 +1,6 @@
 # OKF Agent Memory 中文检索改造版
 
-这是 [OKF Agent Memory](https://github.com/okf-memory/okf-agent-memory) v0.3.1 的中文检索改造版。项目保留 OKF 的 Markdown 数据格式、CLI 和 MCP 接口，在搜索层集成 `go-ego/gse`，让中文和中英文混合查询可以正常分词和召回。
+这是 [OKF Agent Memory](https://github.com/okf-memory/okf-agent-memory) v0.4.3 的中文检索改造版。项目保留 OKF 的 Markdown 数据格式、CLI 和 MCP 接口，在搜索层集成 `go-ego/gse`，让中文和中英文混合查询可以正常分词和召回。
 
 ## 源码
 
@@ -16,8 +16,9 @@
 
 ## 主要改动
 
-- 基于上游 v0.3.1（含 v0.2.0 / v0.3.0 的治理、`code_refs`、AAG / DMAA 和 CLI 加固）；
+- 基于上游 v0.4.3，包含加密 vault、Hub 同步、MCP 结构化返回和安全修复；
 - 使用 gse 搜索模式处理中文分词；
+- 保留显式 `okf_init()`、无参数 `okf init` 创建 `knowledge/` 和双库 wrapper；
 - 保留英文、数字和概念 ID 检索；
 - 分词器只初始化一次，避免每次查询重复加载词典；
 - 使用编译时嵌入词典，发布后的可执行文件不依赖 Go 模块缓存路径；
@@ -43,7 +44,7 @@
 
 #### Windows PowerShell
 
-需要 Go 1.25 或兼容版本：
+需要 Go 1.26 或更新版本：
 
 ```powershell
 gh repo clone passwordand/okf-agent-memory-cn
@@ -190,11 +191,7 @@ args = ["C:\\Users\\<你>\\.config\\agent-memory\\mem-mcp.js", "--scope", "globa
 
 ## 验证状态
 
-已基于上游 v0.3.1 合入 gse 中文检索。`go test ./pkg/okf`、`go vet ./...` 和 OKF 严格校验应通过。中文混合语料覆盖 `登录`、`鉴权`、`知识库`、`JWT` 等查询。
-
-Windows 下官方 `cmd/okf` 的部分 MCP 安全测试仍有原有兼容性问题，与 gse 搜索改动无关。
-
-严格 MCP 客户端（OpenCode、Codex 等）请使用 **v0.3.1-cn.3 或更新**。`v0.3.1-cn.1` 的非 object `outputSchema` 会被标准 MCP SDK 在 `tools/list` 拒绝；`v0.3.1-cn.2` 保留的 object schema 因无 `structuredContent` 会在调用时被拒绝。本版起 6 个工具均不声明 `outputSchema`。
+本源码已合入上游 v0.4.3，并保留中文分词及项目库显式初始化。七个 MCP 工具均声明 object 类型 `outputSchema`，成功调用返回 `structuredContent`；错误调用使用 `isError`。测试结果以本次升级的本地验证为准。
 
 ## 许可证
 

@@ -1,21 +1,21 @@
 ---
 type: Roadmap
-title: Project Roadmap & Development Milestones
-description: Phased implementation roadmap from specification validation to Go library, CLI tooling, and cross-agent testing.
-resource: https://github.com/okf-memory/okf-agent-memory
+title: "Project Roadmap & Development Milestones"
+description: "Phased implementation roadmap from specification validation to Go library, CLI tooling, and cross-agent testing."
+resource: "https://github.com/okf-memory/okf-agent-memory"
 tags: [roadmap, milestones, phases, planning]
-generated: { by: agent/gemini-3.7-flash, at: 2026-08-27T11:24:00Z }
+generated: { by: agent/mcp, at: "2026-09-27T15:50:17Z" }
 status: stable
 sources:
-  - id: roadmap
-    resource: ../../docs/project/ROADMAP.md
+  - resource: ../../docs/project/ROADMAP.md
+    id: roadmap
     title: OKF Agent Memory Project Roadmap
     last_modified: 2026-08-27
 ---
 
 # Project Roadmap & Development Milestones
 
-The project progresses through 11 structured phases designed to take OKF Agent Memory from draft convention to a production-ready standard.[^roadmap]
+The project progresses through 15 structured phases designed to take OKF Agent Memory from draft convention to a production-ready standard.[^roadmap]
 
 ## Implementation Phases
 
@@ -35,6 +35,7 @@ The project progresses through 11 structured phases designed to take OKF Agent M
 | **Phase 12**| **Governance & Code Binding** | **Completed** | 3-tier epistemic governance (`constraint`, `hold`, `context`), `code_refs` binding, `--for-path` discovery, and dogfooding parity test. |
 | **Phase 13**| **DMAA & Agent Action Grammar** | **Completed** | AAG RFC specification, AST linter (`AAG-001`–`AAG-005`), token budget gates, multi-domain templates, and SSoT tool symlinks (`okf agents link`). |
 | **Phase 14**| **Empirical Benchmarking & DMAA Validation** | **Completed** | Pure Go benchmark runner (`okf-benchmark`), Layer 1 & 2 suites, empirical validation on local/cloud models, peer methodology guide, and CLI help hardening. |
+| **Phase 15**| **Upstream v0.4.3 Integration** | **Completed** | Vault and Hub features, object MCP schemas and structured results, retained gse Chinese search and explicit project initialization. |
 
 ## Inter-Concept Connections
 

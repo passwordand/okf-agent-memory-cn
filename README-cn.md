@@ -1,6 +1,6 @@
 # OKF 中文检索改造版
 
-这是 [OKF Agent Memory](https://github.com/okf-memory/okf-agent-memory) v0.3.1 的中文检索改造版，使用 `go-ego/gse` 处理中文和中英文混合文本。它保持 OKF 的 Markdown 数据格式、CLI 和 MCP 接口兼容性，不连接或修改任何现有记忆库。
+这是 [OKF Agent Memory](https://github.com/okf-memory/okf-agent-memory) v0.4.3 的中文检索改造版，使用 `go-ego/gse` 处理中文和中英文混合文本。它保持 OKF 的 Markdown 数据格式、CLI 和 MCP 接口兼容性。
 
 ## 源码
 
@@ -9,7 +9,7 @@
 
 ## 改动内容
 
-- 基于上游 v0.3.1；
+- 基于上游 v0.4.3，包含加密 vault、Hub 同步、MCP 结构化返回和安全修复；
 - 使用 gse 搜索模式处理中文分词；
 - 保留英文、数字和概念 ID 检索；
 - 分词器只初始化一次，避免重复加载词典；
@@ -22,9 +22,7 @@
 
 ## 验证状态
 
-已基于上游 v0.3.1 合入 gse 中文检索。`pkg/okf` 测试应通过；官方 `cmd/okf` 中部分 MCP 安全测试在 Windows 下仍有原有兼容性问题，与 gse 搜索改动无关。
-
-严格 MCP 客户端请使用 **v0.3.1-cn.3 或更新**；自该版起所有工具均不声明 `outputSchema`（服务端不返回 `structuredContent`），兼容标准 MCP SDK 的列表与调用两级校验。
+本源码已合入上游 v0.4.3，同时保留 gse 中文检索、显式 `okf_init()` 和双库 wrapper。七个 MCP 工具成功调用均返回与 object 类型 `outputSchema` 对应的 `structuredContent`。
 
 ## 公开文档
 
@@ -48,7 +46,7 @@
 
 ## 从源码构建
 
-需要 Go 1.25 或兼容版本。在 Windows PowerShell 中运行：
+需要 Go 1.26 或更新版本。在 Windows PowerShell 中运行：
 
 ```powershell
 ./build.ps1

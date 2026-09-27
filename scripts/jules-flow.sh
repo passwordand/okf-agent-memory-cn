@@ -7,7 +7,7 @@ ACTION="${1:-review}"
 REQUESTED_BRANCH="${2:-}"
 
 get_jules_branches() {
-	git branch -r --list "origin/security-audit-*" "origin/jules-*" "origin/*jules*" | tr -d ' ' | grep -v '^$' | sort -u || true
+	git branch -r --list "origin/security-audit-*" "origin/jules-*" "origin/*jules*" "origin/security-harden-*" "origin/fix-cwe22-*" "origin/fix-abs-path-*" "origin/fix-mcp-*" | tr -d ' ' | grep -v '^$' | sort -u || true
 }
 
 resolve_target_branch() {

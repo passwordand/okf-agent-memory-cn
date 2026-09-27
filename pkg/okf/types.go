@@ -12,6 +12,9 @@ const (
 	GovernanceContext    = "context"
 )
 
+// MaxConceptDirectoryDepth defines the maximum allowed directory nesting level for concept IDs.
+const MaxConceptDirectoryDepth = 8
+
 // Actor format regex: <producer>/<version> or <prefix>:<id> (OKF v0.2 §7 open family)
 var actorRegex = regexp.MustCompile(`^(?:[a-zA-Z][\w.-]*:\S+|[^\s/]+/[^\s/]+)$`)
 

@@ -22,6 +22,43 @@ func titleCase(s string) string {
 	return string(r)
 }
 
+// atomicWriteFile writes data to a temporary file in the same directory as targetPath,
+// flushes it to disk, and atomically replaces targetPath using os.Rename.
+func atomicWriteFile(targetPath string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(targetPath)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("failed to create directory for %s: %w", targetPath, err)
+	}
+
+	tmpFile, err := os.CreateTemp(dir, ".tmp-okf-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	defer func() {
+		_ = os.Remove(tmpPath)
+	}()
+
+	if _, err := tmpFile.Write(data); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("failed to write to temporary file: %w", err)
+	}
+	if err := tmpFile.Sync(); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("failed to sync temporary file: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temporary file: %w", err)
+	}
+	if err := os.Chmod(tmpPath, perm); err != nil {
+		return fmt.Errorf("failed to set permissions on temporary file: %w", err)
+	}
+	if err := os.Rename(tmpPath, targetPath); err != nil {
+		return fmt.Errorf("failed to atomically replace %s: %w", targetPath, err)
+	}
+	return nil
+}
+
 // InitBundle 创建 OKF v0.2 知识库的 index.md 和 log.md，并保留已有文件。
 func InitBundle(dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -122,7 +159,7 @@ func AppendLogEntry(bundleDir, entryType, description string) error {
 	}
 
 	// #nosec G703 -- logPath is validated and contained within bundle root
-	return os.WriteFile(logPath, []byte(existingContent), 0o644)
+	return atomicWriteFile(logPath, []byte(existingContent), 0o644)
 }
 
 // ValidateConceptID verifies that a concept ID conforms to OKF naming conventions
@@ -133,8 +170,19 @@ func ValidateConceptID(id string) error {
 		return fmt.Errorf("concept ID cannot be empty")
 	}
 
-	if strings.ContainsAny(trimmed, "\x00\r\n\t") {
-		return fmt.Errorf("concept ID %q contains forbidden control characters", id)
+	for _, r := range trimmed {
+		if unicode.IsControl(r) {
+			return fmt.Errorf("concept ID %q contains forbidden control character U+%04X", id, r)
+		}
+		if unicode.In(r, unicode.Cf) {
+			return fmt.Errorf("concept ID %q contains forbidden format/invisible character U+%04X", id, r)
+		}
+		if (r >= 0x202A && r <= 0x202E) || (r >= 0x2066 && r <= 0x2069) {
+			return fmt.Errorf("concept ID %q contains forbidden bidirectional override character U+%04X", id, r)
+		}
+		if !unicode.IsPrint(r) {
+			return fmt.Errorf("concept ID %q contains non-printable character U+%04X", id, r)
+		}
 	}
 
 	cleanID := strings.TrimSuffix(trimmed, ".md")
@@ -146,8 +194,7 @@ func ValidateConceptID(id string) error {
 		return fmt.Errorf("concept ID %q cannot start with a hyphen -", id)
 	}
 
-	if filepath.IsAbs(cleanID) || strings.HasPrefix(cleanID, "/") || strings.HasPrefix(cleanID, "\\") ||
-		(len(cleanID) >= 2 && cleanID[1] == ':' && ((cleanID[0] >= 'a' && cleanID[0] <= 'z') || (cleanID[0] >= 'A' && cleanID[0] <= 'Z'))) {
+	if IsAbsPath(cleanID) {
 		return fmt.Errorf("concept ID %q must be a relative path", id)
 	}
 
@@ -160,15 +207,25 @@ func ValidateConceptID(id string) error {
 		return fmt.Errorf("concept ID %q contains forbidden '..' traversal", id)
 	}
 
+	if len(parts) > MaxConceptDirectoryDepth {
+		return fmt.Errorf("concept ID %q exceeds maximum directory depth of %d", id, MaxConceptDirectoryDepth)
+	}
+
+	for _, part := range parts {
+		if part != "." && strings.HasPrefix(part, ".") {
+			return fmt.Errorf("concept ID %q cannot contain hidden directory or dot-file component %q", id, part)
+		}
+	}
+
 	// Clean path and ensure it does not escape
-	cleaned := filepath.Clean(cleanID)
+	cleaned := filepath.Clean(strings.ReplaceAll(cleanID, "\\", "/"))
 	if cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("concept ID %q escapes bundle directory", id)
 	}
 
 	// Check for reserved filenames (index.md anywhere, root log.md, root AGENTS.md)
 	base := filepath.Base(cleaned)
-	normClean := filepath.ToSlash(cleaned)
+	normClean := strings.ReplaceAll(cleaned, "\\", "/")
 	if strings.EqualFold(base, "index") || strings.EqualFold(base, "index.md") ||
 		strings.EqualFold(normClean, "log") || strings.EqualFold(normClean, "log.md") ||
 		strings.EqualFold(normClean, "AGENTS") || strings.EqualFold(normClean, "AGENTS.md") {
@@ -249,7 +306,7 @@ func UpdateParentIndex(bundleDir string, c *Concept) error {
 	}
 
 	// #nosec G703 -- indexPath is verified within bundleDir
-	return os.WriteFile(indexPath, []byte(existingContent), 0o644)
+	return atomicWriteFile(indexPath, []byte(existingContent), 0o644)
 }
 
 // resolveInBundle joins relPath onto bundleDir and refuses any result that
@@ -260,9 +317,13 @@ func resolveInBundle(bundleDir, relPath string) (string, error) {
 		return "", fmt.Errorf("failed to resolve bundle directory: %w", err)
 	}
 
+	if IsAbsPath(relPath) {
+		return "", fmt.Errorf("concept path %q must be a relative path", relPath)
+	}
+
 	// Normalize backslashes to forward slashes before calling filepath.Clean
 	// to prevent Windows-style backslash traversal vectors (e.g. "..\..\file") on POSIX OS.
-	normRel := filepath.ToSlash(relPath)
+	normRel := strings.ReplaceAll(relPath, "\\", "/")
 	cleanRel := filepath.Clean(normRel)
 	full := filepath.Join(absBundle, cleanRel)
 	rel, err := filepath.Rel(absBundle, full)
@@ -345,6 +406,31 @@ func sanitizeConceptMetadata(c *Concept) error {
 			return fmt.Errorf("concept %s cannot contain frontmatter delimiter '---'", f.name)
 		}
 	}
+
+	// Security: prevent frontmatter smuggling in body (e.g. forging verified/governance via nested --- blocks)
+	if c.Body != "" {
+		lines := strings.Split(c.Body, "\n")
+		inDelimiter := false
+		for _, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "---" {
+				inDelimiter = !inDelimiter
+				continue
+			}
+			if inDelimiter {
+				if trimmed == "" {
+					continue
+				}
+				lower := strings.ToLower(trimmed)
+				for _, key := range []string{"verified:", "governance:", "generated:", "type:", "status:", "code_refs:", "stale_after:"} {
+					if strings.HasPrefix(lower, key) {
+						return fmt.Errorf("concept body cannot smuggle frontmatter block containing %q", key)
+					}
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -387,7 +473,7 @@ func SaveConcept(bundleDir string, c *Concept, isNew, autoLog, autoIndex bool, a
 	}
 
 	raw := SerializeConcept(c)
-	if err := os.WriteFile(fullPath, []byte(raw), 0o644); err != nil {
+	if err := atomicWriteFile(fullPath, []byte(raw), 0o644); err != nil {
 		return fmt.Errorf("failed to write concept: %w", err)
 	}
 

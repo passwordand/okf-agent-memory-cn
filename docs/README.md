@@ -36,7 +36,7 @@ docs/
 
 ### 4. [Project & Operations](project/)
 * **[Project Roadmap & Milestones](project/ROADMAP.md)** — Phased development plan and future milestones.
-* **[Release Playbook](project/RELEASE_PLAYBOOK.md)** — Versioning, CI/CD pipeline, and distribution procedures.
+* **[Release Playbook](project/playbooks/RELEASE_PLAYBOOK.md)** — Canonical release procedure, master file inventory, checklist, and notes template.
 * **[Multi-Agent Testing & Evaluation](project/AGENT_TESTING.md)** — Test scenarios (TC-01 to TC-07), compatibility matrix, and benchmarks.
 * **[Alternatives & Ecosystem Comparison](project/ALTERNATIVES.md)** — Comparison with Mem0, Letta, and ad-hoc markdown files.
 

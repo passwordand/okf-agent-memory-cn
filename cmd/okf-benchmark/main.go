@@ -334,15 +334,24 @@ func callLLMStream(cfg *providerConfig, systemPrompt, userPrompt string, maxToke
 		messages = append(messages, map[string]string{"role": "user", "content": userPrompt})
 
 		payload = map[string]interface{}{
-			"model":       cfg.Model,
-			"messages":    messages,
-			"max_tokens":  maxTokens,
-			"temperature": temperature,
-			"stream":      true,
+			"model":    cfg.Model,
+			"messages": messages,
+			"stream":   true,
 		}
 
 		mLower := strings.ToLower(cfg.Model)
 		isReasoningModel := strings.Contains(mLower, "deepseek-r1") || strings.Contains(mLower, "qwq") || strings.Contains(mLower, "reason") || strings.HasPrefix(mLower, "o1") || strings.HasPrefix(mLower, "o3")
+
+		// Newer OpenAI models (e.g. gpt-5.6-sol, o1, o3) mandate max_completion_tokens instead of max_tokens
+		if cfg.Name == "openai" && (strings.Contains(mLower, "gpt-5") || strings.HasPrefix(mLower, "o1") || strings.HasPrefix(mLower, "o3")) {
+			payload["max_completion_tokens"] = maxTokens
+		} else {
+			payload["max_tokens"] = maxTokens
+		}
+
+		if temperature > 0 {
+			payload["temperature"] = temperature
+		}
 
 		if !isReasoningModel && (cfg.Name == "lmstudio" || cfg.Name == "ollama") {
 			var stops []string
@@ -358,7 +367,13 @@ func callLLMStream(cfg *providerConfig, systemPrompt, userPrompt string, maxToke
 			stops = append(stops, "```\n\n\n")
 			payload["stop"] = stops
 		}
+	}
 
+	client := http.Client{Timeout: timeout}
+	var startTime time.Time
+	var resp *http.Response
+
+	for attempt := 0; attempt < 4; attempt++ {
 		bodyBytes, mErr := json.Marshal(payload)
 		if mErr != nil {
 			return nil, mErr
@@ -369,46 +384,59 @@ func callLLMStream(cfg *providerConfig, systemPrompt, userPrompt string, maxToke
 			return nil, err
 		}
 		req.Header.Set("Content-Type", "application/json")
-		if cfg.APIKey != "" {
+		if cfg.IsClaude {
+			req.Header.Set("x-api-key", cfg.APIKey)
+			req.Header.Set("anthropic-version", "2023-06-01")
+		} else if cfg.APIKey != "" {
 			req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
 		}
-	}
 
-	client := http.Client{Timeout: timeout}
-	startTime := time.Now()
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
+		startTime = time.Now()
+		resp, err = client.Do(req)
+		if err != nil {
+			return nil, err
+		}
 
-	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusOK {
+			break
+		}
+
 		body, _ := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
 		bodyStr := string(body)
-		if resp.StatusCode == http.StatusBadRequest && strings.Contains(bodyStr, "temperature") {
-			if _, hasTemp := payload["temperature"]; hasTemp {
-				delete(payload, "temperature")
-				newBody, mErr := json.Marshal(payload)
-				if mErr == nil {
-					retryReq, rErr := http.NewRequest("POST", url, bytes.NewReader(newBody))
-					if rErr == nil {
-						retryReq.Header.Set("Content-Type", "application/json")
-						if cfg.APIKey != "" {
-							retryReq.Header.Set("Authorization", "Bearer "+cfg.APIKey)
-						}
-						retryResp, doErr := client.Do(retryReq)
-						if doErr == nil && retryResp.StatusCode == http.StatusOK {
-							resp = retryResp
-							goto streamStart
-						}
-					}
+
+		// Self-healing parameter adjustments for newer APIs and frontier models
+		adjusted := false
+		if resp.StatusCode == http.StatusBadRequest {
+			// 1. max_tokens vs. max_completion_tokens switch
+			if strings.Contains(bodyStr, "max_completion_tokens") {
+				if _, hasMT := payload["max_tokens"]; hasMT {
+					delete(payload, "max_tokens")
+					payload["max_completion_tokens"] = maxTokens
+					adjusted = true
+				}
+			} else if strings.Contains(bodyStr, "max_tokens") && !strings.Contains(bodyStr, "max_completion_tokens") {
+				if _, hasMCT := payload["max_completion_tokens"]; hasMCT {
+					delete(payload, "max_completion_tokens")
+					payload["max_tokens"] = maxTokens
+					adjusted = true
+				}
+			}
+
+			// 2. Unsupported temperature parameter (e.g. reasoning models or newer OpenAI engines)
+			if strings.Contains(bodyStr, "temperature") {
+				if _, hasTemp := payload["temperature"]; hasTemp {
+					delete(payload, "temperature")
+					adjusted = true
 				}
 			}
 		}
-		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, bodyStr)
+
+		if !adjusted || attempt == 3 {
+			return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, bodyStr)
+		}
 	}
 
-streamStart:
 	defer func() { _ = resp.Body.Close() }()
 
 	var firstTokenTime time.Time
@@ -856,6 +884,27 @@ func runLayer1PushBenchmark(cfg *providerConfig, resolvedDataDir string, maxToke
 	return res1, res2
 }
 
+func formatAdherenceDelta(score1, max1, score2, max2 int) string {
+	pct1 := 0.0
+	if max1 > 0 {
+		pct1 = (float64(score1) / float64(max1)) * 100.0
+	}
+	pct2 := 0.0
+	if max2 > 0 {
+		pct2 = (float64(score2) / float64(max2)) * 100.0
+	}
+	if score1 == score2 {
+		if pct2 == 100.0 {
+			return "100% Consistent"
+		}
+		return fmt.Sprintf("Parity (%.1f%%)", pct2)
+	}
+	if score2 > score1 {
+		return fmt.Sprintf("+%.1f%% Consistent", pct2-pct1)
+	}
+	return fmt.Sprintf("-%.1f%% Consistent", pct1-pct2)
+}
+
 func saveLayer1Report(cfg *providerConfig, resolvedDataDir string, temperature float64, res1, res2 *benchmarkResult) string {
 	tokenSavingsPct := (1.0 - (float64(res2.promptTokens) / max(float64(res1.promptTokens), 1.0))) * 100.0
 	ttftSpeedup := max(res1.ttftMs, 0.1) / max(res2.ttftMs, 0.1)
@@ -894,7 +943,7 @@ func saveLayer1Report(cfg *providerConfig, resolvedDataDir string, temperature f
 	fmt.Fprintf(&report, "| **Output Tokens (Generated)** | `%d` tokens | `%d` tokens | - |\n", res1.outputTokens, res2.outputTokens)
 	fmt.Fprintf(&report, "| **Prefill Latency (TTFT)** | `%.1f ms` | `%.1f ms` | **%.1fx faster** |\n", res1.ttftMs, res2.ttftMs, ttftSpeedup)
 	fmt.Fprintf(&report, "| **Turn Duration** | `%s` | `%s` | - |\n", dur1, dur2)
-	fmt.Fprintf(&report, "| **Adherence Accuracy** | `%d/%d` | `%d/%d` | 100%% Consistent |\n\n", score1, maxScore1, score2, maxScore1)
+	fmt.Fprintf(&report, "| **Adherence Accuracy** | `%d/%d` | `%d/%d` | %s |\n\n", score1, maxScore1, score2, maxScore1, formatAdherenceDelta(score1, maxScore1, score2, maxScore1))
 
 	report.WriteString("### Behavioral Checks Verified:\n")
 	var checkKeys []string
@@ -1101,7 +1150,7 @@ func saveLayer2Report(cfg *providerConfig, resolvedDataDir string, temperature f
 	fmt.Fprintf(&report, "| **Output Tokens (Generated)** | `%d` tokens | `%d` tokens | - |\n", res1.outputTokens, res2.outputTokens)
 	fmt.Fprintf(&report, "| **Prefill Latency (TTFT)** | `%.1f ms` | `%.1f ms` | **%.1fx faster** |\n", res1.ttftMs, res2.ttftMs, ttftSpeedup)
 	fmt.Fprintf(&report, "| **Total Turn Time** | `%s` | `%s` | - |\n", dur1, dur2)
-	fmt.Fprintf(&report, "| **Policy Compliance** | `%d/%d` | `%d/%d` | 100%% Consistent |\n\n", score1, maxScore1, score2, maxScore1)
+	fmt.Fprintf(&report, "| **Policy Compliance** | `%d/%d` | `%d/%d` | %s |\n\n", score1, maxScore1, score2, maxScore1, formatAdherenceDelta(score1, maxScore1, score2, maxScore1))
 
 	report.WriteString("### Policy Checks Verified:\n")
 	var checkKeys []string
@@ -1187,8 +1236,34 @@ func saveDMAAReport(cfg *providerConfig, resolvedDataDir string, temperature flo
 	fmt.Fprintf(&r, "| **Total Prompt Context Overhead** | `%d` tokens | `%d` tokens | **🔥 -%.1f%% context tax** |\n", totalPromptBaseline, totalPromptDMAA, totalSavingsPct)
 	fmt.Fprintf(&r, "| **Average Prefill Latency (TTFT)** | `%.1f ms` | `%.1f ms` | **⚡ %.1fx faster TTFT** |\n", avgBaselineTTFT, avgDMAATTFT, avgTTFTSpeedup)
 	fmt.Fprintf(&r, "| **Total Turn Duration** | `%.2f s` | `%.2f s` | **%.1fx faster completion** |\n", totalDurationBaseline, totalDurationDMAA, totalSpeedup)
-	fmt.Fprintf(&r, "| **Global Constraint Adherence** | `%d/%d` (100%%) | `%d/%d` (100%%) | **100%% Deterministic** |\n\n",
-		l1Score1+l2Score1, l1MaxScore1+l2MaxScore1, l1Score2+l2Score2, l1MaxScore1+l2MaxScore1)
+
+	totalScore1 := l1Score1 + l2Score1
+	totalMax1 := l1MaxScore1 + l2MaxScore1
+	totalScore2 := l1Score2 + l2Score2
+	totalMax2 := totalMax1
+
+	pct1 := 0.0
+	if totalMax1 > 0 {
+		pct1 = (float64(totalScore1) / float64(totalMax1)) * 100.0
+	}
+	pct2 := 0.0
+	if totalMax2 > 0 {
+		pct2 = (float64(totalScore2) / float64(totalMax2)) * 100.0
+	}
+
+	deltaAdherence := "**100% Deterministic**"
+	if totalScore2 > totalScore1 {
+		if pct2 == 100.0 {
+			deltaAdherence = fmt.Sprintf("**+%.1f%% Adherence (100%% Deterministic)**", pct2-pct1)
+		} else {
+			deltaAdherence = fmt.Sprintf("**+%.1f%% Adherence**", pct2-pct1)
+		}
+	} else if totalScore1 == totalScore2 && pct2 < 100.0 {
+		deltaAdherence = fmt.Sprintf("Parity (%.1f%%)", pct2)
+	}
+
+	fmt.Fprintf(&r, "| **Global Constraint Adherence** | `%d/%d` (%.1f%%) | `%d/%d` (%.1f%%) | %s |\n\n",
+		totalScore1, totalMax1, pct1, totalScore2, totalMax2, pct2, deltaAdherence)
 
 	r.WriteString("---\n\n## 🎯 Layer 1: Push Working Memory (AAG vs. Conversational Prose)\n\n")
 	r.WriteString("Measures steering efficiency, token tax, and rule compliance between conversational prose (`.cursorrules`) and Agent Action Grammar (`AGENTS.md`).\n\n")
@@ -1198,7 +1273,7 @@ func saveDMAAReport(cfg *providerConfig, resolvedDataDir string, temperature flo
 	fmt.Fprintf(&r, "| **Output Tokens (Generated)** | `%d` tokens | `%d` tokens | - |\n", l1_1.outputTokens, l1_2.outputTokens)
 	fmt.Fprintf(&r, "| **Prefill Latency (TTFT)** | `%.1f ms` | `%.1f ms` | **%.1fx faster** |\n", l1_1.ttftMs, l1_2.ttftMs, l1TTFTSpeedup)
 	fmt.Fprintf(&r, "| **Turn Duration** | `%.2f s` | `%.2f s` | - |\n", l1_1.totalSec, l1_2.totalSec)
-	fmt.Fprintf(&r, "| **Rule Adherence Score** | `%d/%d` | `%d/%d` | 100%% Consistent |\n\n", l1Score1, l1MaxScore1, l1Score2, l1MaxScore1)
+	fmt.Fprintf(&r, "| **Rule Adherence Score** | `%d/%d` | `%d/%d` | %s |\n\n", l1Score1, l1MaxScore1, l1Score2, l1MaxScore1, formatAdherenceDelta(l1Score1, l1MaxScore1, l1Score2, l1MaxScore1))
 
 	r.WriteString("### Behavioral Checks Verified:\n")
 	var l1CheckKeys []string
@@ -1229,7 +1304,7 @@ func saveDMAAReport(cfg *providerConfig, resolvedDataDir string, temperature flo
 	fmt.Fprintf(&r, "| **Output Tokens (Generated)** | `%d` tokens | `%d` tokens | - |\n", l2_1.outputTokens, l2_2.outputTokens)
 	fmt.Fprintf(&r, "| **Prefill Latency (TTFT)** | `%.1f ms` | `%.1f ms` | **%.1fx faster** |\n", l2_1.ttftMs, l2_2.ttftMs, l2TTFTSpeedup)
 	fmt.Fprintf(&r, "| **Total Turn Time** | `%.2f s` | `%.2f s` | - |\n", l2_1.totalSec, l2_2.totalSec)
-	fmt.Fprintf(&r, "| **Policy Compliance** | `%d/%d` | `%d/%d` | 100%% Consistent |\n\n", l2Score1, l2MaxScore1, l2Score2, l2MaxScore1)
+	fmt.Fprintf(&r, "| **Policy Compliance** | `%d/%d` | `%d/%d` | %s |\n\n", l2Score1, l2MaxScore1, l2Score2, l2MaxScore1, formatAdherenceDelta(l2Score1, l2MaxScore1, l2Score2, l2MaxScore1))
 
 	r.WriteString("### Policy Checks Verified:\n")
 	var l2CheckKeys []string
@@ -1258,7 +1333,62 @@ func saveDMAAReport(cfg *providerConfig, resolvedDataDir string, temperature flo
 	return outMd
 }
 
+func printBenchmarkHelp(w io.Writer) {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s\n", strings.Repeat("=", 78))
+	fmt.Fprintf(&b, "  OKF AGENT MEMORY — DUAL-MEMORY AGENT ARCHITECTURE (DMAA) BENCHMARK SUITE\n")
+	fmt.Fprintf(&b, "%s\n\n", strings.Repeat("=", 78))
+	fmt.Fprintf(&b, "Automated empirical benchmark runner quantifying:\n")
+	fmt.Fprintf(&b, "  • Token Reduction: Context savings per turn vs. monolithic dumps\n")
+	fmt.Fprintf(&b, "  • Prefill Latency: Time-To-First-Token (TTFT) acceleration on local GPU & cloud\n")
+	fmt.Fprintf(&b, "  • Negative Constraint Adherence: Zero-leak, Mermaid syntax, and provenance checks\n\n")
+
+	fmt.Fprintf(&b, "MEASUREMENT TIERS (-suite):\n")
+	fmt.Fprintf(&b, "  dmaa (default)   Unified End-to-End Dual-Memory stack (Push AAG + Pull BM25 Progressive Disclosure)\n")
+	fmt.Fprintf(&b, "  push / layer1    Layer 1 Push Working Memory: Conversational Prose vs. Agent Action Grammar\n")
+	fmt.Fprintf(&b, "  pull / layer2    Layer 2 Pull Knowledge Memory: Monolith Dump vs. In-Memory BM25 Retrieval\n\n")
+
+	fmt.Fprintf(&b, "QUICKSTART EXAMPLES:\n")
+	fmt.Fprintf(&b, "  # 1. Local Models (LM Studio or Ollama)\n")
+	fmt.Fprintf(&b, "  okf-benchmark -p lmstudio                        # Auto-detect loaded model in LM Studio\n")
+	fmt.Fprintf(&b, "  okf-benchmark -suite push                        # Run Layer 1 benchmark only\n")
+	fmt.Fprintf(&b, "  okf-benchmark -suite pull                        # Run Layer 2 benchmark only\n")
+	fmt.Fprintf(&b, "  okf-benchmark -p ollama -m llama3.2              # Run on local Ollama\n\n")
+
+	fmt.Fprintf(&b, "  # 2. Remote Cloud Providers (OpenAI, Claude, Gemini, OpenRouter)\n")
+	fmt.Fprintf(&b, "  okf-benchmark -p openai -m gpt-5.6-sol           # Run OpenAI GPT-5.6 Sol (Full DMAA)\n")
+	fmt.Fprintf(&b, "  okf-benchmark -p openai -m gpt-4o                # Run OpenAI GPT-4o\n")
+	fmt.Fprintf(&b, "  okf-benchmark -p claude -m claude-3-7-sonnet     # Run Anthropic Claude 3.7 Sonnet\n")
+	fmt.Fprintf(&b, "  okf-benchmark -p gemini -m gemini-2.5-flash      # Run Google Gemini 2.5 Flash\n")
+	fmt.Fprintf(&b, "  okf-benchmark -p openrouter -m deepseek/deepseek-r1\n\n")
+
+	fmt.Fprintf(&b, "  # 3. Output Inspection & Custom Parameters\n")
+	fmt.Fprintf(&b, "  okf-benchmark -p openai -m gpt-5.6-sol -o        # Compare generated outputs side-by-side\n")
+	fmt.Fprintf(&b, "  okf-benchmark -p openai -m gpt-5.6-sol -timeout 300s\n\n")
+
+	fmt.Fprintf(&b, "CLI OPTIONS:\n")
+	fmt.Fprintf(&b, "  -s, -suite <name>        Suite: 'dmaa' (default), 'push' (Layer 1), 'pull' (Layer 2)\n")
+	fmt.Fprintf(&b, "  -p, -provider <name>     Provider: lmstudio, openai, claude/anthropic, gemini, ollama, openrouter\n")
+	fmt.Fprintf(&b, "  -m, -model <name>        Model ID (auto-detects provider if prefix matches: gpt-, claude-, etc.)\n")
+	fmt.Fprintf(&b, "  -k, -api-key <key>       API key (default: $OPENAI_API_KEY, $ANTHROPIC_API_KEY, $GEMINI_API_KEY)\n")
+	fmt.Fprintf(&b, "  -e, -endpoint <url>      Custom API endpoint URL (default: inferred per provider)\n")
+	fmt.Fprintf(&b, "  -t, -temperature <float> Sampling temperature (default: 0.1)\n")
+	fmt.Fprintf(&b, "  -max-tokens <int>        Maximum generation tokens (default: 3500)\n")
+	fmt.Fprintf(&b, "  -timeout <duration>      Per-run HTTP timeout (default: 180s, e.g. 300s, 5m)\n")
+	fmt.Fprintf(&b, "  -o, -show-output         Print generated responses side-by-side to terminal\n")
+	fmt.Fprintf(&b, "  -warmup=<bool>           Pre-flight ping to prime compute pipelines (default: true)\n")
+	fmt.Fprintf(&b, "  -data <path>             Path to benchmarks/data directory (auto-detected if omitted)\n")
+	fmt.Fprintf(&b, "  -h, -help                Show this help and overview screen\n\n")
+
+	_, _ = fmt.Fprint(w, b.String())
+}
+
 func main() {
+	if len(os.Args) == 1 {
+		printBenchmarkHelp(os.Stdout)
+		return
+	}
+
 	var suite string
 	var provider string
 	var apiBase string
@@ -1292,21 +1422,7 @@ func main() {
 	flag.BoolVar(&warmup, "warmup", true, "Execute a pre-flight ping to prime GPU compute pipelines and context buffers before measuring")
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "OKF Agent Memory — Dual-Memory Agent Architecture (DMAA) Benchmark Suite\n\n")
-		fmt.Fprintf(os.Stderr, "Measures token reduction, prefill latency (TTFT), and constraint adherence across:\n")
-		fmt.Fprintf(os.Stderr, "  - Layer 1 (Push Working Memory): Conversational Prose vs. Agent Action Grammar (AAG)\n")
-		fmt.Fprintf(os.Stderr, "  - Layer 2 (Pull Knowledge Memory): Monolith Context Dump vs. OKF Progressive Disclosure\n")
-		fmt.Fprintf(os.Stderr, "  - Full DMAA: End-to-End combination of both layers\n\n")
-		fmt.Fprintf(os.Stderr, "Usage: okf-benchmark [options]\n\n")
-		fmt.Fprintf(os.Stderr, "Options:\n")
-		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "\nExamples:\n")
-		fmt.Fprintf(os.Stderr, "  okf-benchmark -suite push                        # Benchmark Layer 1 (AAG vs. Prose)\n")
-		fmt.Fprintf(os.Stderr, "  okf-benchmark -suite pull                        # Benchmark Layer 2 (OKF Progressive Disclosure)\n")
-		fmt.Fprintf(os.Stderr, "  okf-benchmark -suite dmaa                        # Full End-to-End DMAA Benchmark\n")
-		fmt.Fprintf(os.Stderr, "  okf-benchmark -p openai -m gpt-4o                # Run on OpenAI GPT-4o\n")
-		fmt.Fprintf(os.Stderr, "  okf-benchmark -p claude -m claude-3-7-sonnet     # Run on Anthropic Claude 3.7\n")
-		fmt.Fprintf(os.Stderr, "  okf-benchmark -p ollama -m llama3.2              # Run on local Ollama\n\n")
+		printBenchmarkHelp(os.Stderr)
 	}
 	flag.Parse()
 

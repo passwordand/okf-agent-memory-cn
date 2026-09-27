@@ -3,6 +3,7 @@ package okf
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -207,11 +208,11 @@ func Validate(b *Bundle, opts ValidateOptions) *ValidationResult {
 			if refTrimmed == "" {
 				continue
 			}
-			normRef := filepath.ToSlash(refTrimmed)
+			normRef := strings.ReplaceAll(refTrimmed, "\\", "/")
 			cleanRef := filepath.Clean(normRef)
-			if filepath.IsAbs(cleanRef) || strings.HasPrefix(cleanRef, "/") || strings.HasPrefix(cleanRef, "\\") {
+			if IsAbsPath(cleanRef) {
 				res.GateFindings = append(res.GateFindings, fmt.Sprintf("%s: code_refs '%s' must be a relative path", at, refTrimmed))
-			} else if cleanRef == ".." || strings.HasPrefix(cleanRef, ".."+string(filepath.Separator)) || strings.HasPrefix(cleanRef, "../") || strings.HasPrefix(cleanRef, "..\\") {
+			} else if cleanRef == ".." || strings.HasPrefix(cleanRef, ".."+string(filepath.Separator)) || strings.HasPrefix(cleanRef, "../") {
 				res.GateFindings = append(res.GateFindings, fmt.Sprintf("%s: code_refs '%s' contains forbidden '..' traversal", at, refTrimmed))
 			}
 		}
@@ -258,6 +259,29 @@ func Validate(b *Bundle, opts ValidateOptions) *ValidationResult {
 			}
 		}
 
+		// Check that each concept is listed in its immediate parent index.md
+		if len(b.Indexes) > 0 {
+			for _, c := range b.Concepts {
+				normConceptPath := strings.ReplaceAll(c.Path, "\\", "/")
+				dir := path.Dir(normConceptPath)
+				indexRel := "index.md"
+				if dir != "." {
+					indexRel = path.Join(dir, "index.md")
+				}
+				idxContent, ok := b.Indexes[indexRel]
+				if !ok {
+					res.Warnings = append(res.Warnings, fmt.Sprintf("%s: parent index %s does not exist", c.Path, indexRel))
+					continue
+				}
+
+				targetFilename := filepath.Base(c.Path)
+				linkTarget := fmt.Sprintf("(%s)", targetFilename)
+				if !strings.Contains(idxContent, linkTarget) {
+					res.Warnings = append(res.Warnings, fmt.Sprintf("%s: concept is not listed in parent index %s", c.Path, indexRel))
+				}
+			}
+		}
+
 		// Check code_refs drift (verify non-glob references exist in repository or bundle)
 		bundleAbs, _ := filepath.Abs(b.RootPath)
 		projectRoot := filepath.Dir(bundleAbs)
@@ -269,7 +293,7 @@ func Validate(b *Bundle, opts ValidateOptions) *ValidationResult {
 					continue
 				}
 				cleanRef := filepath.Clean(refTrimmed)
-				if cleanRef == ".." || strings.HasPrefix(cleanRef, ".."+string(filepath.Separator)) || filepath.IsAbs(cleanRef) {
+				if cleanRef == ".." || strings.HasPrefix(cleanRef, ".."+string(filepath.Separator)) || IsAbsPath(cleanRef) {
 					continue
 				}
 				pathInProj := filepath.Join(projectRoot, cleanRef)

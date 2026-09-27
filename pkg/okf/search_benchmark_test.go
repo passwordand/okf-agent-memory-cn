@@ -20,8 +20,7 @@ func BenchmarkSearchUnicode(b *testing.B) {
 	}
 	bundle := &okf.Bundle{Concepts: concepts}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		bundle.Search("тензорная reconstruction", 5)
 	}
 }
