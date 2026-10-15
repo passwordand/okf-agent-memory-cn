@@ -1,3 +1,15 @@
+## 2026-10-15
+* **Update**: Updated concept `progress/current.md`.
+* **Update**: Updated concept `roadmap/milestones.md`.
+* **Update**: Updated concept `architecture/upstream-v0-6-1-isolation.md`.
+
+## 2026-10-14
+* **Update**: Updated concept `architecture/governance-model.md`.
+* **Update**: Linked `progress/current.md` to `architecture/upstream-v0-6-1-isolation.md` (本次隔离升级方案与测试边界).
+* **Update**: Updated concept `progress/current.md`.
+* **Update**: Linked `architecture/upstream-v0-6-1-isolation.md` to `architecture/upstream-v0-4-3-integration.md` (沿用中文版保留功能，并在 v0.6.1 试验中延续双库隔离).
+* **Creation**: Documented concept `architecture/upstream-v0-6-1-isolation.md` (上游 v0.6.1 隔离升级与双库兼容方案).
+
 ## 2026-09-27
 * **Update**: Updated concept `progress/current.md`.
 

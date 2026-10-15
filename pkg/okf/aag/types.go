@@ -29,8 +29,12 @@ type Finding struct {
 }
 
 // TokenStats tracks token estimation and budget consumption.
+// EstimatedTokens covers only the managed OKF AGENT MEMORY block (or the whole
+// file if no markers exist) and is the value gated by the budget. TotalTokens
+// covers the entire file, including maintainer-owned content outside the block.
 type TokenStats struct {
 	EstimatedTokens int  `json:"estimated_tokens"`
+	TotalTokens     int  `json:"total_tokens"`
 	BudgetLimit     int  `json:"budget_limit"`
 	BudgetExceeded  bool `json:"budget_exceeded"`
 }
@@ -50,6 +54,6 @@ const DefaultBudgetLimit = 400
 
 // LinterOptions configures the AAG linter behavior.
 type LinterOptions struct {
-	BudgetLimit int  // Max token budget (default: 400, or 150 for strict micro-syntax)
+	BudgetLimit int  // Max token budget for the managed block (default: 400)
 	Strict      bool // Treat warnings as errors
 }

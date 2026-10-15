@@ -4,7 +4,7 @@ title: "Project Roadmap & Development Milestones"
 description: "Phased implementation roadmap from specification validation to Go library, CLI tooling, and cross-agent testing."
 resource: "https://github.com/okf-memory/okf-agent-memory"
 tags: [roadmap, milestones, phases, planning]
-generated: { by: agent/mcp, at: "2026-09-27T15:50:17Z" }
+generated: { by: agent/cli, at: "2026-10-15T03:18:49Z" }
 status: stable
 sources:
   - resource: ../../docs/project/ROADMAP.md
@@ -15,7 +15,7 @@ sources:
 
 # Project Roadmap & Development Milestones
 
-The project progresses through 15 structured phases designed to take OKF Agent Memory from draft convention to a production-ready standard.[^roadmap]
+The project progresses through 16 structured phases designed to take OKF Agent Memory from draft convention to a production-ready standard.[^roadmap]
 
 ## Implementation Phases
 
@@ -36,6 +36,8 @@ The project progresses through 15 structured phases designed to take OKF Agent M
 | **Phase 13**| **DMAA & Agent Action Grammar** | **Completed** | AAG RFC specification, AST linter (`AAG-001`–`AAG-005`), token budget gates, multi-domain templates, and SSoT tool symlinks (`okf agents link`). |
 | **Phase 14**| **Empirical Benchmarking & DMAA Validation** | **Completed** | Pure Go benchmark runner (`okf-benchmark`), Layer 1 & 2 suites, empirical validation on local/cloud models, peer methodology guide, and CLI help hardening. |
 | **Phase 15**| **Upstream v0.4.3 Integration** | **Completed** | Vault and Hub features, object MCP schemas and structured results, retained gse Chinese search and explicit project initialization. |
+
+| **Phase 16** | **上游 v0.6.1 中文版适配** | **Completed** | 元数据编辑、知识包与搜索修复；保留中文、显式初始化和双库结构，Windows 兼容验证通过。 |
 
 ## Inter-Concept Connections
 

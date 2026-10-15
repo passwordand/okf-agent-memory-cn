@@ -1,6 +1,8 @@
 # OKF Agent Memory 中文检索改造版
 
-这是 [OKF Agent Memory](https://github.com/okf-memory/okf-agent-memory) v0.4.3 的中文检索改造版。项目保留 OKF 的 Markdown 数据格式、CLI 和 MCP 接口，在搜索层集成 `go-ego/gse`，让中文和中英文混合查询可以正常分词和召回。
+这是 [OKF Agent Memory](https://github.com/okf-memory/okf-agent-memory) v0.6.1 的中文增强版（v0.6.1-cn.1）。项目保留 OKF 的 Markdown 数据格式、CLI 和 MCP 接口，在搜索层集成 `go-ego/gse`，让中文和中英文混合查询可以正常分词和召回。
+
+> v0.6.1-cn.1 保留中文检索、显式初始化和双库隔离。更新内容及兼容性说明见 [发布说明](docs/releases/v0.6.1-cn.1.md)，历史验证见 [隔离测试报告](docs/project/UPGRADE_V061_ISOLATION_REPORT.md)。
 
 ## 源码
 
@@ -16,7 +18,8 @@
 
 ## 主要改动
 
-- 基于上游 v0.4.3，包含加密 vault、Hub 同步、MCP 结构化返回和安全修复；
+- 基于上游 v0.6.1，新增知识包、多层检索、元数据过滤及搜索 / 同步修复；
+- 显式绑定根目录的 MCP 保持双库隔离，不允许跨层参数扩大读取范围；
 - 使用 gse 搜索模式处理中文分词；
 - 保留显式 `okf_init()`、无参数 `okf init` 创建 `knowledge/` 和双库 wrapper；
 - 保留英文、数字和概念 ID 检索；
@@ -191,7 +194,7 @@ args = ["C:\\Users\\<你>\\.config\\agent-memory\\mem-mcp.js", "--scope", "globa
 
 ## 验证状态
 
-本源码已合入上游 v0.4.3，并保留中文分词及项目库显式初始化。七个 MCP 工具均声明 object 类型 `outputSchema`，成功调用返回 `structuredContent`；错误调用使用 `isError`。测试结果以本次升级的本地验证为准。
+本源码已合入上游 v0.6.1，并保留中文分词及项目库显式初始化。七个 MCP 工具均声明 object 类型 `outputSchema`，成功调用返回 `structuredContent`；错误调用使用 `isError`。测试结果以本次升级的本地验证为准。
 
 ## 许可证
 

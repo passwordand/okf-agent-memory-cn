@@ -143,6 +143,28 @@ func TestLintRule_AAG004_MermaidFormat(t *testing.T) {
 	}
 }
 
+func TestTokenStats_TotalIncludesContentOutsideBlock(t *testing.T) {
+	block := "<!-- BEGIN OKF AGENT MEMORY -->\n## 1. Behavioral Invariants & Constraints (RFC 2119)\n- MUST okf_search(query=keywords, limit=3) before proposing changes.\n<!-- END OKF AGENT MEMORY -->\n"
+	base := "# AGENTS.md\n\n" + block
+	extended := "# AGENTS.md\n## 0. Domain Codex\n- FORMAT: diagrams => ASSERT(syntax == mermaid)\n- COMMITS: maintainer signs and executes all commits; agent stages and proposes a message only.\n\n" + block
+
+	b := LintContent("base.md", []byte(base), LinterOptions{})
+	e := LintContent("ext.md", []byte(extended), LinterOptions{})
+
+	if b.TokenStats.EstimatedTokens != e.TokenStats.EstimatedTokens {
+		t.Errorf("block tokens must ignore content outside the block: %d vs %d",
+			b.TokenStats.EstimatedTokens, e.TokenStats.EstimatedTokens)
+	}
+	if e.TokenStats.TotalTokens <= b.TokenStats.TotalTokens {
+		t.Errorf("total tokens must grow with content outside the block: %d vs %d",
+			b.TokenStats.TotalTokens, e.TokenStats.TotalTokens)
+	}
+	if e.TokenStats.TotalTokens < e.TokenStats.EstimatedTokens {
+		t.Errorf("total tokens (%d) must be >= block tokens (%d)",
+			e.TokenStats.TotalTokens, e.TokenStats.EstimatedTokens)
+	}
+}
+
 func TestLintRule_AAG005_TokenBudget(t *testing.T) {
 	content := `# AGENTS.md
 ## 0. Project & Domain Codex

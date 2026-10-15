@@ -5,6 +5,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -12,6 +13,10 @@ import (
 )
 
 var newlineReplacer = strings.NewReplacer("\r", " ", "\n", " ")
+
+// frontmatterSmuggleRegex matches reserved frontmatter keys in a body line, including quoted keys
+// and whitespace before the colon, which a plain prefix check would miss.
+var frontmatterSmuggleRegex = regexp.MustCompile(`(?i)^\s*["']?(verified|governance|generated|type|status|code_refs|stale_after)["']?\s*:`)
 
 func titleCase(s string) string {
 	if s == "" {
@@ -351,7 +356,7 @@ func resolveInBundle(bundleDir, relPath string) (string, error) {
 
 	// Check reserved filenames and file type on symlink-resolved target
 	targetBase := filepath.Base(realTarget)
-	realRoot, err := filepath.EvalSymlinks(bundleDir)
+	realRoot, err := resolveExistingPath(bundleDir)
 	if err != nil {
 		realRoot, _ = filepath.Abs(bundleDir)
 	} else {
@@ -421,11 +426,8 @@ func sanitizeConceptMetadata(c *Concept) error {
 				if trimmed == "" {
 					continue
 				}
-				lower := strings.ToLower(trimmed)
-				for _, key := range []string{"verified:", "governance:", "generated:", "type:", "status:", "code_refs:", "stale_after:"} {
-					if strings.HasPrefix(lower, key) {
-						return fmt.Errorf("concept body cannot smuggle frontmatter block containing %q", key)
-					}
+				if match := frontmatterSmuggleRegex.FindStringSubmatch(trimmed); match != nil {
+					return fmt.Errorf("concept body cannot smuggle frontmatter block containing %q", match[1])
 				}
 			}
 		}
@@ -434,8 +436,16 @@ func sanitizeConceptMetadata(c *Concept) error {
 	return nil
 }
 
+// SaveOptions controls bookkeeping and authoring metadata when persisting a concept.
+type SaveOptions struct {
+	IsNew     bool
+	AutoLog   bool
+	AutoIndex bool
+	Actor     string
+}
+
 // SaveConcept writes a concept file to disk and optionally executes automatic bookkeeping.
-func SaveConcept(bundleDir string, c *Concept, isNew, autoLog, autoIndex bool, actor string) error {
+func SaveConcept(bundleDir string, c *Concept, opts SaveOptions) error {
 	if c.ID == "" && c.Path != "" {
 		c.ID = strings.TrimSuffix(c.Path, ".md")
 	}
@@ -449,9 +459,12 @@ func SaveConcept(bundleDir string, c *Concept, isNew, autoLog, autoIndex bool, a
 	}
 
 	// Update generated timestamp & actor
-	actor = strings.TrimSpace(actor)
+	actor := strings.TrimSpace(opts.Actor)
 	if actor == "" {
 		actor = "agent/okf-tool"
+	}
+	if err := ensureNoForgedHumanVerification(fullPath, c, actor, opts.IsNew); err != nil {
+		return err
 	}
 	c.Generated = &Generated{
 		By: actor,
@@ -478,16 +491,16 @@ func SaveConcept(bundleDir string, c *Concept, isNew, autoLog, autoIndex bool, a
 	}
 
 	// Automated Bookkeeping
-	if autoIndex {
+	if opts.AutoIndex {
 		if err := UpdateParentIndex(bundleDir, c); err != nil {
 			return fmt.Errorf("failed to update parent index: %w", err)
 		}
 	}
 
-	if autoLog {
+	if opts.AutoLog {
 		entryType := "Update"
 		desc := fmt.Sprintf("Updated concept `%s`.", c.Path)
-		if isNew {
+		if opts.IsNew {
 			entryType = "Creation"
 			desc = fmt.Sprintf("Documented concept `%s` (%s).", c.Path, c.Title)
 		}
@@ -554,7 +567,12 @@ func RelateConcepts(bundleDir, sourceID, targetID, relationDesc, actor string) e
 
 	srcConcept.Body = insertRelationship(srcConcept.Body, strings.TrimPrefix(relStatement, "\n"))
 
-	if err := SaveConcept(bundleDir, srcConcept, false, false, false, actor); err != nil {
+	if err := SaveConcept(bundleDir, srcConcept, SaveOptions{
+		IsNew:     false,
+		AutoLog:   false,
+		AutoIndex: false,
+		Actor:     actor,
+	}); err != nil {
 		return fmt.Errorf("failed to save related concept: %w", err)
 	}
 

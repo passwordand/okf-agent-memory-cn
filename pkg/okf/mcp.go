@@ -1,4 +1,4 @@
-package main
+package okf
 
 import (
 	"bufio"
@@ -10,9 +10,17 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-
-	"github.com/okf-memory/okf-agent-memory/pkg/okf"
+	"time"
 )
+
+var MCPVersion = "0.2.0"
+
+// SetMCPVersion sets the version string advertised in the MCP initialize handshake.
+func SetMCPVersion(v string) {
+	if v != "" {
+		MCPVersion = v
+	}
+}
 
 type jsonRPCRequest struct {
 	JSONRPC string           `json:"jsonrpc"`
@@ -39,10 +47,11 @@ type mcpToolCallParams struct {
 }
 
 type mcpServer struct {
-	bundleDir string
-	rootDir   string
-	writer    io.Writer
-	mu        sync.Mutex
+	bundleDir  string
+	rootDir    string
+	bundleOnly bool
+	writer     io.Writer
+	mu         sync.Mutex
 }
 
 // RunMCPServer runs the Model Context Protocol stdio server for an OKF bundle.
@@ -79,6 +88,8 @@ func readBoundedLine(r *bufio.Reader, maxLen int) ([]byte, bool, error) {
 // RunMCPServerIO runs the MCP server on the provided reader and writer.
 func RunMCPServerIO(bundleDir string, in io.Reader, out io.Writer) error {
 	rootDir := os.Getenv("OKF_MCP_ROOT")
+	// 显式根目录用于双库隔离，跨层查询不能扩大此边界。
+	bundleOnly := rootDir != ""
 	if rootDir == "" {
 		if bundleDir != "" && bundleDir != "." {
 			cleanBundle := filepath.Clean(bundleDir)
@@ -93,16 +104,17 @@ func RunMCPServerIO(bundleDir string, in io.Reader, out io.Writer) error {
 
 	absRoot, err := filepath.Abs(rootDir)
 	if err == nil {
-		if evalRoot, err := filepath.EvalSymlinks(absRoot); err == nil {
+		if evalRoot, err := resolveExistingPath(absRoot); err == nil {
 			absRoot = evalRoot
 		}
 		rootDir = absRoot
 	}
 
 	s := &mcpServer{
-		bundleDir: bundleDir,
-		rootDir:   rootDir,
-		writer:    out,
+		bundleDir:  bundleDir,
+		rootDir:    rootDir,
+		bundleOnly: bundleOnly,
+		writer:     out,
 	}
 
 	reader := bufio.NewReader(in)
@@ -195,7 +207,7 @@ func (s *mcpServer) handleRequest(req jsonRPCRequest) {
 			"protocolVersion": "2024-11-05",
 			"serverInfo": map[string]string{
 				"name":    "okf-agent-memory",
-				"version": Version,
+				"version": MCPVersion,
 			},
 			"capabilities": map[string]any{
 				"tools": map[string]bool{
@@ -233,7 +245,7 @@ func (s *mcpServer) handleRequest(req jsonRPCRequest) {
 
 	case "tools/list":
 		s.sendResponse(req.ID, map[string]any{
-			"tools": getMCPTools(),
+			"tools": s.toolDefinitions(),
 		})
 
 	case "tools/call":
@@ -259,8 +271,32 @@ func init() {
 	}
 }
 
-func getMCPTools() []map[string]any {
+// GetMCPTools returns the cached tool definitions with input and output schemas.
+func GetMCPTools() []map[string]any {
 	return cachedMCPTools
+}
+
+// 隔离服务只声明实际可用的本库读取能力，不修改共享的上游工具定义。
+func (s *mcpServer) toolDefinitions() []map[string]any {
+	if !s.bundleOnly {
+		return GetMCPTools()
+	}
+	var definitions []map[string]any
+	if err := json.Unmarshal(embeddedToolsJSON, &definitions); err != nil {
+		panic(err) // 启动时已经验证同一份嵌入的 JSON。
+	}
+	for _, tool := range definitions {
+		properties := tool["inputSchema"].(map[string]any)["properties"].(map[string]any)
+		switch tool["name"] {
+		case "okf_search":
+			scope := properties["scope"].(map[string]any)
+			scope["enum"] = []string{"bundle", "project"}
+			scope["description"] = "仅搜索当前 MCP 服务绑定的知识库；省略时使用 bundle。"
+		case "okf_show":
+			properties["concept_id"].(map[string]any)["description"] = "绑定知识库中的概念 ID；不接受跨库或跨层引用。"
+		}
+	}
+	return definitions
 }
 
 func (s *mcpServer) resolveBundleDir(callParams mcpToolCallParams) (string, error) {
@@ -284,7 +320,7 @@ func (s *mcpServer) resolveBundleDir(callParams mcpToolCallParams) (string, erro
 
 	// Confinement check: if s.rootDir is configured, target must stay within s.rootDir
 	if s.rootDir != "" {
-		absRoot, err := filepath.EvalSymlinks(s.rootDir)
+		absRoot, err := resolveExistingPath(s.rootDir)
 		if err != nil {
 			absRoot, err = filepath.Abs(s.rootDir)
 			if err != nil {
@@ -295,7 +331,7 @@ func (s *mcpServer) resolveBundleDir(callParams mcpToolCallParams) (string, erro
 		}
 
 		var absTarget string
-		if okf.IsAbsPath(normTarget) {
+		if IsAbsPath(normTarget) {
 			absTarget = normTarget
 		} else {
 			absTarget = filepath.Join(s.rootDir, filepath.FromSlash(normTarget))
@@ -317,7 +353,7 @@ func (s *mcpServer) resolveBundleDir(callParams mcpToolCallParams) (string, erro
 			curr = parent
 		}
 
-		realCurr, err := filepath.EvalSymlinks(curr)
+		realCurr, err := resolveExistingPath(curr)
 		if err != nil {
 			return "", fmt.Errorf("failed to resolve bundle path %q: %w", target, err)
 		}
@@ -359,6 +395,36 @@ func getStringArg(args map[string]any, key string, maxLen int, required bool) (s
 	return strVal, nil
 }
 
+func getTagsArg(args map[string]any) ([]string, error) {
+	value, ok := args["tags"].([]any)
+	if !ok {
+		return nil, fmt.Errorf("argument 'tags' must be an array of strings")
+	}
+	if len(value) > 100 {
+		return nil, fmt.Errorf("argument 'tags' exceeds maximum of 100 items")
+	}
+	tags := make([]string, 0, len(value))
+	for _, item := range value {
+		tag, ok := item.(string)
+		if !ok || len(tag) > 50 || strings.TrimSpace(tag) == "" {
+			return nil, fmt.Errorf("each tag must be a non-empty string of at most 50 bytes")
+		}
+		tags = append(tags, strings.TrimSpace(tag))
+	}
+	return tags, nil
+}
+
+func getMutationStatus(args map[string]any) (string, error) {
+	status, err := getStringArg(args, "status", 1000, true)
+	if err != nil {
+		return "", err
+	}
+	if !IsValidConceptStatus(status) {
+		return "", fmt.Errorf("argument 'status' must be draft, stable, or deprecated")
+	}
+	return status, nil
+}
+
 func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 	var callParams mcpToolCallParams
 	if err := json.Unmarshal(req.Params, &callParams); err != nil {
@@ -396,16 +462,16 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 			s.sendToolResult(req.ID, fmt.Sprintf("Failed to inspect %q: %v", logPath, logErr), nil, true)
 			return
 		}
-		if err := okf.InitBundle(bundleDir); err != nil {
+		if err := InitBundle(bundleDir); err != nil {
 			s.sendToolResult(req.ID, fmt.Sprintf("Failed to initialize bundle in %q: %v", bundleDir, err), nil, true)
 			return
 		}
-		initialized, err := okf.LoadBundle(bundleDir)
+		initialized, err := LoadBundle(bundleDir)
 		if err != nil {
 			s.sendToolResult(req.ID, fmt.Sprintf("Initialized bundle in %q, but loading failed: %v", bundleDir, err), nil, true)
 			return
 		}
-		validation := okf.Validate(initialized, okf.ValidateOptions{Strict: true, Drift: true})
+		validation := Validate(initialized, ValidateOptions{Strict: true, Drift: true})
 		if !validation.IsConformant || !validation.GatePassed {
 			resultJSON, _ := json.Marshal(validation)
 			s.sendToolResult(req.ID, fmt.Sprintf("Bundle in %q is not valid: %s", bundleDir, resultJSON), nil, true)
@@ -421,7 +487,7 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 		return
 	}
 
-	b, err := okf.LoadBundle(bundleDir)
+	b, err := LoadBundle(bundleDir)
 	if err != nil {
 		s.sendToolResult(req.ID, fmt.Sprintf("Failed to load bundle from %q: %v", bundleDir, err), nil, true)
 		return
@@ -434,10 +500,42 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 			s.sendToolResult(req.ID, fmt.Sprintf("Invalid arguments: %v", err), nil, true)
 			return
 		}
+		scope, err := getStringArg(callParams.Arguments, "scope", 100, false)
+		if err != nil {
+			s.sendToolResult(req.ID, fmt.Sprintf("Invalid arguments: %v", err), nil, true)
+			return
+		}
+		if s.bundleOnly {
+			scope = strings.ToLower(strings.TrimSpace(scope))
+			if scope != "" && scope != "bundle" && scope != "project" {
+				s.sendToolResult(req.ID, "Scope denied: this MCP server is restricted to its bound bundle", nil, true)
+				return
+			}
+			scope = "bundle"
+		}
 		forPath, err := getStringArg(callParams.Arguments, "for_path", 1000, false)
 		if err != nil {
 			s.sendToolResult(req.ID, fmt.Sprintf("Invalid arguments: %v", err), nil, true)
 			return
+		}
+		filter, err := getStringArg(callParams.Arguments, "filter", 1000, false)
+		if err != nil {
+			s.sendToolResult(req.ID, fmt.Sprintf("Invalid arguments: %v", err), nil, true)
+			return
+		}
+		staleWithinStr, err := getStringArg(callParams.Arguments, "stale_within", 100, false)
+		if err != nil {
+			s.sendToolResult(req.ID, fmt.Sprintf("Invalid arguments: %v", err), nil, true)
+			return
+		}
+		var staleWithin time.Duration
+		if staleWithinStr != "" {
+			d, err := ParseRelativeDuration(staleWithinStr)
+			if err != nil {
+				s.sendToolResult(req.ID, fmt.Sprintf("Invalid stale_within duration: %v", err), nil, true)
+				return
+			}
+			staleWithin = d
 		}
 		limit := 10
 		if l, ok := callParams.Arguments["limit"].(float64); ok {
@@ -447,14 +545,35 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 				limit = 100
 			}
 		}
-		var results []okf.SearchResult
-		if forPath != "" {
-			results = b.SearchForPath(forPath, query, limit)
-		} else {
-			results = b.Search(query, limit)
+
+		vendorRoot := filepath.Join(".okf", "vendor")
+		if s.rootDir != "" {
+			cand := filepath.Join(s.rootDir, ".okf", "vendor")
+			if info, err := os.Stat(cand); err == nil && info.IsDir() {
+				vendorRoot = cand
+			}
+		}
+
+		results, err := SearchLayered(LayeredSearchOptions{
+			BundleDir:  bundleDir,
+			VendorRoot: vendorRoot,
+			UserDir:    ResolveUserDir(),
+			SystemDir:  ResolveSystemDir(),
+			Scope:      scope,
+			SearchOpts: SearchOptions{
+				Query:       query,
+				TargetPath:  forPath,
+				Limit:       limit,
+				Filter:      filter,
+				StaleWithin: staleWithin,
+			},
+		})
+		if err != nil {
+			s.sendToolResult(req.ID, fmt.Sprintf("Search error: %v", err), nil, true)
+			return
 		}
 		if results == nil {
-			results = []okf.SearchResult{}
+			results = []SearchResult{}
 		}
 		resJSON, _ := json.Marshal(results)
 		envelope := map[string]any{"results": results}
@@ -467,18 +586,38 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 			return
 		}
 		conceptID = strings.TrimSpace(conceptID)
-		if err := okf.ValidateConceptID(conceptID); err != nil {
-			s.sendToolResult(req.ID, fmt.Sprintf("Invalid concept_id: %v", err), nil, true)
+
+		if s.bundleOnly {
+			// 只从已经受根目录约束的库读取，不解析 user:/system:/vendor 等跨层引用。
+			if err := ValidateConceptID(conceptID); err != nil {
+				s.sendToolResult(req.ID, fmt.Sprintf("Invalid concept ID: %v", err), nil, true)
+				return
+			}
+			c, found := b.Concepts[strings.TrimSuffix(conceptID, ".md")]
+			if !found {
+				s.sendToolResult(req.ID, fmt.Sprintf("Concept %q not found in bound bundle", conceptID), nil, true)
+				return
+			}
+			resJSON, _ := json.Marshal(c)
+			s.sendToolResult(req.ID, string(resJSON), c, false)
 			return
 		}
-		conceptID = strings.TrimSuffix(conceptID, ".md")
-		c, ok := b.Concepts[conceptID]
-		if !ok {
-			s.sendToolResult(req.ID, fmt.Sprintf("Concept '%s' not found in %s", conceptID, bundleDir), nil, true)
+
+		vendorRoot := filepath.Join(".okf", "vendor")
+		if s.rootDir != "" {
+			cand := filepath.Join(s.rootDir, ".okf", "vendor")
+			if info, err := os.Stat(cand); err == nil && info.IsDir() {
+				vendorRoot = cand
+			}
+		}
+
+		res, err := ResolveScopedConcept(conceptID, bundleDir, vendorRoot, ResolveUserDir(), ResolveSystemDir())
+		if err != nil {
+			s.sendToolResult(req.ID, fmt.Sprintf("%v", err), nil, true)
 			return
 		}
-		resJSON, _ := json.Marshal(c)
-		s.sendToolResult(req.ID, string(resJSON), c, false)
+		resJSON, _ := json.Marshal(res.Concept)
+		s.sendToolResult(req.ID, string(resJSON), res.Concept, false)
 
 	case "okf_validate":
 		strict := true
@@ -489,7 +628,21 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 		if stVal, ok := callParams.Arguments["stale"].(bool); ok {
 			stale = stVal
 		}
-		res := okf.Validate(b, okf.ValidateOptions{Strict: strict, Drift: true, Stale: stale})
+		staleWithinStr, err := getStringArg(callParams.Arguments, "stale_within", 100, false)
+		if err != nil {
+			s.sendToolResult(req.ID, fmt.Sprintf("Invalid arguments: %v", err), nil, true)
+			return
+		}
+		var staleWithin time.Duration
+		if staleWithinStr != "" {
+			d, err := ParseRelativeDuration(staleWithinStr)
+			if err != nil {
+				s.sendToolResult(req.ID, fmt.Sprintf("Invalid stale_within duration: %v", err), nil, true)
+				return
+			}
+			staleWithin = d
+		}
+		res := Validate(b, ValidateOptions{Strict: strict, Drift: true, Stale: stale, StaleWithin: staleWithin})
 		if res.Errors == nil {
 			res.Errors = []string{}
 		}
@@ -500,7 +653,7 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 			res.GateFindings = []string{}
 		}
 		if res.BrokenLinks == nil {
-			res.BrokenLinks = []okf.BrokenLink{}
+			res.BrokenLinks = []BrokenLink{}
 		}
 		if res.Orphans == nil {
 			res.Orphans = []string{}
@@ -515,7 +668,7 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 			return
 		}
 		conceptID = strings.TrimSpace(conceptID)
-		if err := okf.ValidateConceptID(conceptID); err != nil {
+		if err := ValidateConceptID(conceptID); err != nil {
 			s.sendToolResult(req.ID, fmt.Sprintf("Invalid concept_id: %v", err), nil, true)
 			return
 		}
@@ -548,18 +701,41 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 			s.sendToolResult(req.ID, fmt.Sprintf("Invalid arguments: %v", err), nil, true)
 			return
 		}
+		status := "stable"
+		if _, exists := callParams.Arguments["status"]; exists {
+			status, err = getMutationStatus(callParams.Arguments)
+			if err != nil {
+				s.sendToolResult(req.ID, fmt.Sprintf("Invalid arguments: %v", err), nil, true)
+				return
+			}
+		}
+		var tags []string
+		if _, exists := callParams.Arguments["tags"]; exists {
+			tags, err = getTagsArg(callParams.Arguments)
+			if err != nil {
+				s.sendToolResult(req.ID, fmt.Sprintf("Invalid arguments: %v", err), nil, true)
+				return
+			}
+		}
 
 		cleanID := strings.TrimSuffix(conceptID, ".md")
-		c := &okf.Concept{
+		c := &Concept{
 			ID:          cleanID,
 			Path:        cleanID + ".md",
 			Type:        conceptType,
 			Title:       strings.TrimSpace(title),
 			Description: desc,
 			Body:        body,
+			Status:      status,
+			Tags:        tags,
 		}
 
-		if err := okf.SaveConcept(bundleDir, c, true, true, true, "agent/mcp"); err != nil {
+		if err := SaveConcept(bundleDir, c, SaveOptions{
+			IsNew:     true,
+			AutoLog:   true,
+			AutoIndex: true,
+			Actor:     "agent/mcp",
+		}); err != nil {
 			s.sendToolResult(req.ID, fmt.Sprintf("Failed to save concept: %v", err), nil, true)
 			return
 		}
@@ -581,7 +757,7 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 			return
 		}
 		conceptID = strings.TrimSpace(conceptID)
-		if err := okf.ValidateConceptID(conceptID); err != nil {
+		if err := ValidateConceptID(conceptID); err != nil {
 			s.sendToolResult(req.ID, fmt.Sprintf("Invalid concept_id: %v", err), nil, true)
 			return
 		}
@@ -594,6 +770,34 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 
 		// Work on a copy to prevent in-memory concept corruption if validation or disk write fails
 		updated := *c
+		if _, exists := callParams.Arguments["type"]; exists {
+			conceptType, err := getStringArg(callParams.Arguments, "type", 1000, true)
+			if err != nil {
+				s.sendToolResult(req.ID, fmt.Sprintf("Invalid arguments: %v", err), nil, true)
+				return
+			}
+			if strings.TrimSpace(conceptType) == "" {
+				s.sendToolResult(req.ID, "Invalid type: concept type cannot be empty or whitespace", nil, true)
+				return
+			}
+			updated.Type = strings.TrimSpace(conceptType)
+		}
+		if _, exists := callParams.Arguments["status"]; exists {
+			status, err := getMutationStatus(callParams.Arguments)
+			if err != nil {
+				s.sendToolResult(req.ID, fmt.Sprintf("Invalid arguments: %v", err), nil, true)
+				return
+			}
+			updated.Status = status
+		}
+		if _, exists := callParams.Arguments["tags"]; exists {
+			tags, err := getTagsArg(callParams.Arguments)
+			if err != nil {
+				s.sendToolResult(req.ID, fmt.Sprintf("Invalid arguments: %v", err), nil, true)
+				return
+			}
+			updated.Tags = tags
+		}
 
 		if _, exists := callParams.Arguments["title"]; exists {
 			title, err := getStringArg(callParams.Arguments, "title", 1000, true)
@@ -624,7 +828,12 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 			updated.Body = body
 		}
 
-		if err := okf.SaveConcept(bundleDir, &updated, false, true, true, "agent/mcp"); err != nil {
+		if err := SaveConcept(bundleDir, &updated, SaveOptions{
+			IsNew:     false,
+			AutoLog:   true,
+			AutoIndex: true,
+			Actor:     "agent/mcp",
+		}); err != nil {
 			s.sendToolResult(req.ID, fmt.Sprintf("Failed to update concept: %v", err), nil, true)
 			return
 		}
@@ -658,7 +867,7 @@ func (s *mcpServer) handleToolCall(req jsonRPCRequest) {
 			return
 		}
 
-		if err := okf.RelateConcepts(bundleDir, srcID, tgtID, desc, "agent/mcp"); err != nil {
+		if err := RelateConcepts(bundleDir, srcID, tgtID, desc, "agent/mcp"); err != nil {
 			s.sendToolResult(req.ID, fmt.Sprintf("Failed to relate concepts: %v", err), nil, true)
 			return
 		}

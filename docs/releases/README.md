@@ -4,6 +4,11 @@ Historical release notes for **OKF Agent Memory**.
 
 | Version | Release Date | Highlights |
 | :--- | :--- | :--- |
+| [**v0.6.1-cn.1**](./v0.6.1-cn.1.md) | 2026-10-15 | 中文版正式适配，保留双库结构，修复 Windows junction 边界 |
+| [**上游 v0.6.1**](./v0.6.1.md) | 2026-10-12 | 同步状态持久化与 BM25 评分修复 |
+| [**上游 v0.6.0**](./v0.6.0.md) | 2026-10-04 | 列表元数据、过滤规则、符号链接与验证来源保护 |
+| [**上游 v0.5.0**](./v0.5.0.md) | 2026-10-01 | 知识包 Registry、依赖锁定与多层记忆 |
+| [**上游 v0.4.4**](./v0.4.4.md) | 2026-09-27 | 元数据编辑、过滤、到期检查及代码重构 |
 | [**v0.4.3-cn.1**](./v0.4.3-cn.1.md) | 2026-09-27 | 基于上游 v0.4.3，保留中文检索、显式初始化与双库 wrapper |
 | [**v0.4.3**](./v0.4.3.md) | 2026-09-23 | Absolute Path Evasion Defense, Frontmatter Smuggling Defense, Validate Taxonomy Reconciliation |
 | [**v0.4.2**](./v0.4.2.md) | 2026-09-19 | MCP Security Hardening, Boundary Integrity, ReDoS/OOM Protection, Unicode BiDi & Trojan Source Defenses |

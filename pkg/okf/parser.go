@@ -315,16 +315,26 @@ func ParseConcept(relPath, content string) (*Concept, error) {
 				c.Sources = append(c.Sources, src)
 			}
 		default:
-			if len(b.lines) == 0 {
-				c.Extra[k] = parseExtraValue(b.inline)
-			} else {
-				c.Extra[k] = normalizeBlockLines(b.lines)
-				c.extraBlocks[k] = true
-			}
+			c.setExtra(k, b.inline, b.lines)
 		}
 	}
 
 	return c, nil
+}
+
+// setExtra stores an unknown frontmatter field. Scalars and lists become typed values; any other
+// block structure is kept as verbatim lines so it survives a round trip unchanged.
+func (c *Concept) setExtra(key, inline string, blockLines []string) {
+	if len(blockLines) == 0 {
+		c.Extra[key] = parseExtraValue(inline)
+		return
+	}
+	if items, ok := parseBlockList(blockLines); ok {
+		c.Extra[key] = items
+		return
+	}
+	c.Extra[key] = normalizeBlockLines(blockLines)
+	c.extraBlocks[key] = true
 }
 
 func normalizeBlockLines(lines []string) []string {
@@ -361,7 +371,59 @@ func parseExtraValue(s string) any {
 	if json.Unmarshal([]byte(s), &value) == nil {
 		return value
 	}
+	if items, ok := parseFlowList(s); ok {
+		return items
+	}
 	return unquote(s)
+}
+
+// parseFlowList parses a YAML flow sequence such as `[a, 'b, c', 3]` into typed items.
+func parseFlowList(s string) ([]any, bool) {
+	if !strings.HasPrefix(s, "[") || !strings.HasSuffix(s, "]") {
+		return nil, false
+	}
+	items := []any{}
+	for _, part := range splitFlowItems(s[1 : len(s)-1]) {
+		if part = strings.TrimSpace(part); part != "" {
+			items = append(items, parseExtraValue(part))
+		}
+	}
+	return items, true
+}
+
+// parseBlockList parses a block sequence of scalar items (`- a`) with uniform indentation into typed
+// items. Sequences of mappings, nested sequences, or other structures report false.
+func parseBlockList(lines []string) ([]any, bool) {
+	items := []any{}
+	indent := -1
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		rest, isItem := strings.CutPrefix(trimmed, "-")
+		if !isItem {
+			return nil, false
+		}
+		lineIndent := len(line) - len(strings.TrimLeft(line, " \t"))
+		if indent != -1 && lineIndent != indent {
+			return nil, false
+		}
+		indent = lineIndent
+
+		item := strings.TrimSpace(rest)
+		if item == "" || item == "-" || strings.HasPrefix(item, "- ") || isMappingEntry(item) {
+			return nil, false
+		}
+		items = append(items, parseExtraValue(item))
+	}
+	return items, len(items) > 0
+}
+
+// isMappingEntry reports whether s is a `key: value` pair rather than a plain scalar such as a URL.
+func isMappingEntry(s string) bool {
+	_, after, ok := cutYAMLPair(s)
+	return ok && (after == "" || after[0] == ' ')
 }
 
 func parseBlockMapping(lines []string) map[string]string {

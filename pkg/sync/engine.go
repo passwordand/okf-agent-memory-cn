@@ -48,13 +48,18 @@ type Engine struct {
 
 // NewEngine initializes a synchronization engine for an OKF bundle.
 func NewEngine(client *Client, vaultID string, vaultKey []byte, bundlePath string) *Engine {
-	return &Engine{
+	engine := &Engine{
 		Client:     client,
 		VaultID:    vaultID,
 		VaultKey:   vaultKey,
 		BundlePath: bundlePath,
 		cachedTree: vault.NewTree(),
 	}
+	// Resume from the last synced position recorded inside the bundle (if any)
+	// so consecutive CLI invocations behave like one continuous session.
+	// Missing or invalid state is ignored; the engine then starts empty.
+	engine.loadState()
+	return engine
 }
 
 // ScanBundle walks the local bundle directory and reads all non-hidden files into memory.
@@ -204,6 +209,10 @@ func (e *Engine) Push(ctx context.Context, author vault.CommitAuthor, message st
 	e.cachedHead = resp.Head
 	e.cachedTree = newTree
 
+	if err := e.saveState(); err != nil {
+		return nil, fmt.Errorf("sync: commit %s was accepted by the hub, but persisting the sync state failed: %w", resp.Head, err)
+	}
+
 	return &PushResult{
 		CommitHash:     resp.Head,
 		UploadedBlobs:  len(blobsToUpload),
@@ -294,6 +303,10 @@ func (e *Engine) Pull(ctx context.Context) (*PullResult, error) {
 
 	e.cachedHead = headResp.HeadCommit
 	e.cachedTree = remoteTree
+
+	if err := e.saveState(); err != nil {
+		return nil, fmt.Errorf("sync: pulled commit %s, but persisting the sync state failed: %w", headResp.HeadCommit, err)
+	}
 
 	return &PullResult{
 		CommitHash:   headResp.HeadCommit,
@@ -506,6 +519,10 @@ func (e *Engine) Sync(ctx context.Context, author vault.CommitAuthor, message st
 
 		e.cachedHead = resp.Head
 		e.cachedTree = reconcileRes.MergedTree
+
+		if err := e.saveState(); err != nil {
+			return nil, fmt.Errorf("sync: merged commit %s was accepted by the hub, but persisting the sync state failed: %w", resp.Head, err)
+		}
 
 		return &SyncResult{
 			CommitHash: resp.Head,

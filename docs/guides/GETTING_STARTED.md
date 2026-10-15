@@ -187,11 +187,16 @@ sequenceDiagram
 | Task | Command |
 | :--- | :--- |
 | **Search knowledge** | `okf search "database auth" knowledge` |
+| **Search vendor/user scope** | `okf search "routing" --scope vendor` |
 | **Inspect a concept** | `okf show architecture/auth knowledge` |
+| **Inspect a vendor concept** | `okf show @nextjs-15/decisions/routing` |
 | **Inspect raw concept markdown** | `okf show architecture/auth knowledge --raw` |
 | **Create a concept** | `okf create decisions/cache-ttl knowledge --type Decision --title "Redis Cache TTL" --desc "Set default TTL to 300s."` |
 | **Update a concept** | `okf update decisions/cache-ttl knowledge --desc "Extended TTL to 600s."` |
 | **Connect two concepts** | `okf relate decisions/cache-ttl architecture/backend knowledge --desc "Backend uses Redis TTL config"` |
+| **Pull vendor package** | `okf pull nextjs-15` or `okf pull peter/django-5-rules` |
+| **Restore vendor lockfile** | `okf restore` |
+| **List vendor packages** | `okf vendor list` |
 | **Validate knowledge base** | `okf validate knowledge --strict --drift` |
 | **Run MCP server** | `okf mcp knowledge` |
 

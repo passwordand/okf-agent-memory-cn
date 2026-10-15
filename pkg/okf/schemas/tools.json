@@ -33,9 +33,22 @@
           "type": "string",
           "description": "Search terms to find matching concepts."
         },
+        "scope": {
+          "type": "string",
+          "enum": ["all", "project", "bundle", "vendor", "user", "system"],
+          "description": "Optional memory layer to search: all, project, bundle, vendor, user, system (default 'all')."
+        },
         "for_path": {
           "type": "string",
           "description": "Optional file or directory path to find governing concepts via code_refs (e.g. 'pkg/okf/types.go')."
+        },
+        "filter": {
+          "type": "string",
+          "description": "Optional frontmatter key-value filter predicate (e.g. 'type=Decision', 'verified.by=human')."
+        },
+        "stale_within": {
+          "type": "string",
+          "description": "Optional relative duration to filter concepts becoming stale within horizon (e.g. '14d', '2w', '3m')."
         },
         "limit": {
           "type": "integer",
@@ -107,6 +120,19 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "scope": {
+                "type": "string",
+                "enum": ["project", "vendor", "user", "system"],
+                "description": "Originating memory scope: project | vendor | user | system."
+              },
+              "priority": {
+                "type": "integer",
+                "description": "Memory layer priority: project (100) > vendor (70) > user (50) > system (10)."
+              },
+              "origin": {
+                "type": "string",
+                "description": "Source origin indicator (e.g. 'local', '@vendor-bundle', 'user', 'system')."
               }
             },
             "required": [
@@ -133,7 +159,7 @@
       "properties": {
         "concept_id": {
           "type": "string",
-          "description": "The concept ID (e.g. 'architecture/layers')."
+          "description": "The concept ID or scoped reference (e.g. 'architecture/layers', '@nextjs-15/decisions/routing', 'user:preferences/style', 'system:corp/policies', or canonical URN 'okf://@nextjs-15/routing')."
         },
         "bundle": {
           "type": "string",
@@ -211,6 +237,10 @@
         "stale": {
           "type": "boolean",
           "description": "Fail if any concepts have reached their stale_after date."
+        },
+        "stale_within": {
+          "type": "string",
+          "description": "Optional relative duration to fail if concepts expire within horizon (e.g. '14d', '2w')."
         },
         "bundle": {
           "type": "string",
@@ -328,6 +358,18 @@
           "type": "string",
           "description": "Markdown body content."
         },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "stable", "deprecated"],
+          "default": "stable",
+          "description": "Optional concept lifecycle status; defaults to stable."
+        },
+        "tags": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {"type": "string", "minLength": 1, "maxLength": 50},
+          "description": "Optional array of searchable tags."
+        },
         "bundle": {
           "type": "string",
           "description": "Optional path to the OKF knowledge bundle directory (defaults to 'knowledge' or project bundle)."
@@ -370,13 +412,29 @@
   },
   {
     "name": "okf_update",
-    "description": "Update an existing concept's title, description, or body with automatic log.md bookkeeping.",
+    "description": "Update an existing concept's type, status, tags, title, description, or body with automatic log.md bookkeeping. Omitted fields are preserved; an empty tags array clears tags.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "concept_id": {
           "type": "string",
           "description": "Path without .md (e.g. 'decisions/auth-flow')."
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Updated non-empty concept type."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "stable", "deprecated"],
+          "description": "Updated concept lifecycle status."
+        },
+        "tags": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {"type": "string", "minLength": 1, "maxLength": 50},
+          "description": "Replacement tags; an empty array clears existing tags."
         },
         "title": {
           "type": "string",

@@ -1,4 +1,4 @@
-.PHONY: all build build-benchmark install test fmt vet lint vuln audit-security jules-list jules-review jules-merge validate validate-examples validate-all check release dist-bundle benchmark clean help sync-assets
+.PHONY: all build build-benchmark install test fmt vet lint vuln security-audit jules-list jules-review jules-merge validate validate-examples validate-all check release dist-bundle benchmark clean help sync-assets update-deps update-tools
 
 BIN := bin/okf
 BUNDLE := knowledge
@@ -16,8 +16,8 @@ all: help
 ## Pipeline & Verification
 ## ----------------------------------------------------------------------
 
-## check: Run the complete CI/local pipeline (fmt, vet, lint, test, validate-all)
-check: fmt vet lint test validate-all
+## check: Run the complete CI/local pipeline (fmt, vet, lint, security-audit, test, validate-all)
+check: fmt vet lint security-audit test validate-all
 
 ## test: Run all Go unit and integration tests (including dogfood asset drift check)
 test:
@@ -46,8 +46,8 @@ lint:
 		go vet ./...; \
 	fi
 
-## audit-security: Run automated security analysis (gosec and govulncheck)
-audit-security:
+## security-audit: Run automated security analysis (gosec and govulncheck)
+security-audit:
 	@echo "==> Running security checks..."
 	@which gosec > /dev/null && gosec -quiet -exclude=G301,G306 -exclude-dir=examples ./... || echo "gosec: optional (install via: go install github.com/securego/gosec/v2/cmd/gosec@latest)"
 	@which govulncheck > /dev/null && govulncheck ./... || echo "govulncheck: optional (install via: go install golang.org/x/vuln/cmd/govulncheck@latest)"
@@ -67,6 +67,26 @@ jules-review:
 ## jules-merge: Merge verified Jules remediation branch into develop (BRANCH=<name>)
 jules-merge:
 	@./scripts/jules-flow.sh merge $(BRANCH)
+
+## ----------------------------------------------------------------------
+## Tooling & Dependencies
+## ----------------------------------------------------------------------
+
+## update-deps: Update Go module dependencies and development/security tools
+update-deps: update-tools
+	@echo "==> Updating Go module dependencies..."
+	@go get -u ./...
+	@go mod tidy
+	@echo "==> Dependencies updated successfully."
+
+## update-tools: Install or update development and security tools to latest versions
+update-tools:
+	@echo "==> Updating development and security tools..."
+	@go install golang.org/x/vuln/cmd/govulncheck@latest
+	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@go install mvdan.cc/gofumpt@latest
+	@go install github.com/securego/gosec/v2/cmd/gosec@latest
+	@echo "==> Tools updated successfully."
 
 ## ----------------------------------------------------------------------
 ## Build & OKF Knowledge Validation
@@ -142,10 +162,13 @@ help:
 	@echo "  make fmt               Format code with gofumpt / gofmt"
 	@echo "  make vet               Run go vet static analysis"
 	@echo "  make lint              Run golangci-lint (fallback: go vet)"
-	@echo "  make audit-security    Run automated security audit (gosec, govulncheck)"
+	@echo "  make security-audit    Run automated security audit (gosec, govulncheck)"
 	@echo "  make jules-list        List open Jules security branches on origin"
 	@echo "  make jules-review      Run isolated build & test of latest Jules branch"
 	@echo "  make jules-merge       Merge verified Jules branch into develop"
+	@echo "Tooling & Dependencies:"
+	@echo "  make update-deps       Update Go dependencies and dev/security tools"
+	@echo "  make update-tools      Install or update tools (govulncheck, golangci-lint, gofumpt, gosec)"
 	@echo ""
 	@echo "Build & Knowledge:"
 	@echo "  make build             Compile bin/okf executable"

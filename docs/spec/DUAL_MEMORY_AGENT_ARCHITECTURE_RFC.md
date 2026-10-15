@@ -27,7 +27,7 @@ flowchart TD
     subgraph PUSH["1. NORMATIVE BEHAVIORAL CODEX (Push / Permanent)"]
         direction TB
         C1["Anchored in AGENTS.md / CODEX.md"]
-        C2["Expressed in compact AAG syntax (~80-150 tokens)"]
+        C2["Expressed in compact AAG syntax (capped at 400 tokens)"]
         C3["Enforces guardrails: Tone, Ethics, Output formats, Tool preferences, Assertions"]
     end
 
@@ -54,7 +54,7 @@ flowchart TD
 
 * **Location:** Canonical `AGENTS.md` at repository root (symlinked to `CLAUDE.md`, `.cursorrules`, etc.).
 * **Syntax:** Exclusively **Agent Action Grammar (AAG)** — no lexical padding, only dense, deterministic operators (`ASSERT`, `=>`, `!`, `MUST`).
-* **Budget:** Strictly capped at **150–200 tokens**.
+* **Budget:** Strictly capped at **400 tokens** for the managed OKF AGENT MEMORY block (rule `AAG-005`). Smaller is better: every token is paid on every request.
 * **Composition Model:**
   $$\text{AGENTS.md} = \underbrace{\text{Project Codex (Domain Invariants)}}_{\text{Customizable rules in AAG}} + \underbrace{\text{OKF Memory Bridge}}_{\text{Standardized memory protocol}}$$
 * **Domain Responsibilities:**

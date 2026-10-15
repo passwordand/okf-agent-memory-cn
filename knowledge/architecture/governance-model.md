@@ -3,9 +3,9 @@ type: Decision
 title: Governance vs. Execution Context and Code Binding
 description: "3-tier epistemic governance model (constraint, hold, context) and code-to-knowledge binding via code_refs."
 tags: [governance, authority, code-refs, binding, architecture, decision]
-generated: { by: agent/cli, at: "2026-09-11T15:37:43Z" }
+generated: { by: agent/codex, at: "2026-10-14T10:16:05Z" }
 governance: constraint
-code_refs: [pkg/okf/types.go, pkg/okf/search.go, pkg/okf/validator.go, cmd/okf/main.go, cmd/okf/mcp.go]
+code_refs: [pkg/okf/types.go, pkg/okf/search.go, pkg/okf/validator.go, cmd/okf/main.go, pkg/okf/mcp.go]
 ---
 
 # Governance vs. Execution Context and Code Binding
@@ -49,7 +49,6 @@ To eliminate YAML boilerplate, concepts derive their governance level automatica
 Concepts declare the source files or directories they govern via the `code_refs` frontmatter list:
 
 ```yaml
----
 id: architecture/governance-model
 type: Decision
 title: Governance vs. Execution Context and Code Binding
@@ -57,7 +56,6 @@ governance: constraint
 code_refs:
   - pkg/okf/*.go
   - cmd/okf/main.go
----
 ```
 
 ### Pattern Matching Capabilities

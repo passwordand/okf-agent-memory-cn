@@ -10,3 +10,4 @@
 * [Governance vs. Execution Context and Code Binding](governance-model.md) - 3-tier epistemic governance model (constraint, hold, context) and code-to-knowledge binding via code_refs.
 * [显式初始化缺失的项目知识库](explicit-bundle-initialization.md) - 项目 MCP 可在知识库缺失时连接，只有显式调用无路径参数的 okf_init 或 CLI init 才创建受边界约束的 knowledge 知识库。
 * [上游 v0.4.3 与中文记忆功能的集成决定](upstream-v0-4-3-integration.md) - 以稳定版 v0.4.3 为源码基线，保留 gse 中文检索、显式 okf_init、CLI 默认 knowledge 和双库隔离，并接入上游结构化 MCP 与 Hub。
+* [上游 v0.6.1 隔离升级与双库兼容方案](upstream-v0-6-1-isolation.md) - 在独立工作树合入 v0.6.1，保留中文分词和显式初始化，强化双库与 Windows junction 边界；测试通过部分与环境限制分开记录。

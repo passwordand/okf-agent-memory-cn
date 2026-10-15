@@ -77,9 +77,10 @@ handle format correctness.
 
 ### In Progress / Next Milestones
 
+- [ ] Search scoring refinement: Fix DF/TF asymmetry for short acronyms & terms, restrict prefix matching (< 4 chars exact match), and add field TF normalization.
 - [ ] Community feedback and broader ecosystem adoption.
-- [ ] RFC: Hierarchical & Multi-Scope Memory (`scope: project` vs `scope: user`, Issue #11).
-- [ ] RFC: Federated Knowledge & Remote Vendoring (`https://` & `mcp://` scopes).
+- [x] RFC: Hierarchical & Multi-Scope Memory (`scope: project` vs `scope: user`, Issue #11, implemented in v0.5.0).
+- [x] RFC: Federated Knowledge & Remote Vendoring (`https://` & `mcp://` scopes, implemented in v0.5.0 via OKF Registry, `okf pull`, and `@bundle` scopes).
 - [ ] Automated migration tools for legacy ad-hoc markdown files.
 - [ ] Extended MCP client ecosystem recipes.
 

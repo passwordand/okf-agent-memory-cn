@@ -15,10 +15,11 @@ flowchart TD
     B --> D["docs/releases/README.md Archive Table"]
     B --> E["knowledge/log.md + roadmap/milestones.md"]
     B --> F["CONTRIBUTORS.md Credit Community"]
-    C & D & E & F --> G["Commit & Push to develop"]
-    G --> H["Merge develop into main --ff-only"]
-    H --> I["Create Signed Tag: git tag -s vX.Y.Z"]
-    I --> J["Push main & tag to GitHub"]
+    C & D & E & F --> S["Agent stages files + proposes commit message"]
+    S --> G["Maintainer: signed commit & push to develop"]
+    G --> H["Maintainer: merge develop into main --ff-only"]
+    H --> I["Maintainer: Create Signed Tag: git tag -s vX.Y.Z"]
+    I --> J["Maintainer: Push main & tag to GitHub"]
     J --> K[GitHub Actions Release Workflow]
     K --> L["Fail-Fast: Validate docs/releases/vX.Y.Z.md exists"]
     K --> M[Build 6x Cross-Platform Binaries]
@@ -41,7 +42,7 @@ Whenever a new release is prepared, verify and update the following files:
 | **`docs/releases/README.md`** | **MANDATORY** | Release history table. Append new row with version, date, and 1-line summary. |
 | **`knowledge/log.md`** | **MANDATORY** | Append dated entry `## YYYY-MM-DD` recording the release and any concept updates. |
 | **`knowledge/roadmap/milestones.md`** | **MANDATORY** | Update phase count and ensure the completed phase row accurately reflects deliverables. |
-| **`CONTRIBUTORS.md`** | **MANDATORY** | Credit all users who contributed code, bug reports, issue reproductions, or architectural feedback. |
+| **`CONTRIBUTORS.md`** | **MANDATORY** | Credit all users who contributed code, bug reports, issue reproductions, or architectural feedback. Never credit the project's own agent or bot accounts. Reporters whose operator is unknown are thanked in the release notes; adding them here is at the maintainer's discretion. |
 | **`docs/security/SECURITY_AUDIT.md`** | Optional | Update if security audit protocols, Jules templates, or invariants changed. |
 | **`README.md`** | Optional | Update if release archive links, version badges, or CLI examples need alignment. |
 
@@ -72,9 +73,12 @@ git status
 
 ## 4. Step-by-Step Release Workflow
 
+> [!IMPORTANT]
+> **Maintainer executes all commits, merges, tags, and pushes.** AI agents only stage the changes and propose the commit message. They never run `git commit`, `git merge`, `git tag`, or `git push`, and never disable or bypass the terminal sandbox to do so. Every command in the steps below that writes Git metadata is run by the maintainer, so commits and tags carry the maintainer's signature.
+
 ### Step 1: Author Release Notes & Update Files (on `develop`)
 
-Always author release materials on **`develop`** first:
+Always author release materials on **`develop`** first (an agent stops after `git add`):
 
 ```bash
 git checkout develop
@@ -88,13 +92,15 @@ git pull origin develop
 # Validate knowledge bundle
 make validate
 
-# Commit release documentation
+# Stage release documentation (agent or maintainer)
 git add docs/releases/ docs/releases/README.md knowledge/ CONTRIBUTORS.md
-git commit -m "chore(release): prepare release notes and changelog for vX.Y.Z"
+
+# Maintainer only: signed commit and push
+git commit -S -m "chore(release): prepare release notes and changelog for vX.Y.Z"
 git push origin develop
 ```
 
-### Step 2: Merge into `main` and Create Signed Tag
+### Step 2: Merge into `main` and Create Signed Tag (maintainer only)
 
 ```bash
 # Switch to main and fast-forward
@@ -170,10 +176,10 @@ Copy this checklist into release tracking issues or PR descriptions:
 - [ ] `docs/releases/README.md` updated with new release entry row
 - [ ] `knowledge/log.md` contains dated release entry
 - [ ] `knowledge/roadmap/milestones.md` updated with phase status and deliverables
-- [ ] `CONTRIBUTORS.md` updated with credit for all issue reporters and PR contributors
+- [ ] `CONTRIBUTORS.md` updated with credit for issue reporters and PR contributors (reporters with an unknown operator: release notes only, unless the maintainer decides otherwise)
 
 #### Git & Tagging
-- [ ] Changes committed to `develop` and pushed
+- [ ] Changes staged by the agent; signed commit created on `develop` and pushed by the maintainer
 - [ ] `main` fast-forwarded to `develop` (`git merge --ff-only develop`)
 - [ ] Signed tag created: `git tag -s v<X.Y.Z> -m "Release v<X.Y.Z>: <Title>"`
 - [ ] Tag pushed to GitHub: `git push origin v<X.Y.Z>`

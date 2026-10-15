@@ -1,15 +1,14 @@
-package main
+package okf
 
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/okf-memory/okf-agent-memory/pkg/okf"
 )
 
 func runMCPConversation(t *testing.T, bundleDir string, inputs []string) []jsonRPCResponse {
@@ -98,7 +97,7 @@ func TestMCPToolsListOutputSchemas(t *testing.T) {
 	// per MCP spec so strict clients (OpenCode, Pi agent, MCP SDK 2.0.0)
 	// accept the tools/list handshake.
 	seen := map[string]bool{}
-	for _, tool := range getMCPTools() {
+	for _, tool := range GetMCPTools() {
 		name, _ := tool["name"].(string)
 		seen[name] = true
 		schema, ok := tool["outputSchema"].(map[string]any)
@@ -125,9 +124,111 @@ func TestMCPToolsListOutputSchemas(t *testing.T) {
 	}
 }
 
+func TestMCPMutationMetadata(t *testing.T) {
+	bundle := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bundle, "index.md"), []byte("---\nokf_version: \"0.2\"\n---\n# Bundle\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bundle, "log.md"), []byte("# Log\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	requests := []struct {
+		name string
+		args map[string]any
+		fail bool
+	}{
+		{"okf_create", map[string]any{"concept_id": "item", "type": "Fact", "title": "Item", "description": "Original", "status": "draft", "tags": []string{" first ", "second"}}, false},
+		{"okf_show", map[string]any{"concept_id": "item"}, false},
+		{"okf_update", map[string]any{"concept_id": "item", "type": "Decision", "status": "deprecated", "tags": []string{"next"}}, false},
+		{"okf_show", map[string]any{"concept_id": "item"}, false},
+		{"okf_update", map[string]any{"concept_id": "item", "description": "Changed"}, false},
+		{"okf_update", map[string]any{"concept_id": "item", "tags": []string{}}, false},
+		{"okf_update", map[string]any{"concept_id": "item", "status": "active"}, true},
+		{"okf_create", map[string]any{"concept_id": "invalid", "type": "Fact", "title": "Invalid", "description": "Invalid", "status": "active"}, true},
+		{"okf_update", map[string]any{"concept_id": "item", "type": "  "}, true},
+		{"okf_update", map[string]any{"concept_id": "item", "tags": "comma,separated"}, true},
+		{"okf_update", map[string]any{"concept_id": "item", "tags": []string{strings.Repeat("x", 51)}}, true},
+		{"okf_create", map[string]any{"concept_id": "default-status", "type": "Fact", "title": "Default", "description": "Default"}, false},
+	}
+	var inputs []string
+	for i, r := range requests {
+		r.args["bundle"] = jsonPath(bundle)
+		encoded, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": i + 1, "method": "tools/call", "params": map[string]any{"name": r.name, "arguments": r.args}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		inputs = append(inputs, string(encoded))
+	}
+	responses := runMCPConversation(t, bundle, inputs)
+	if len(responses) != len(requests) {
+		t.Fatalf("got %d responses, want %d", len(responses), len(requests))
+	}
+	for i, r := range requests {
+		result, ok := responses[i].Result.(map[string]any)
+		gotFail, _ := result["isError"].(bool)
+		if !ok || gotFail != r.fail {
+			t.Errorf("request %d (%s): unexpected result: %+v", i+1, r.name, responses[i])
+		}
+	}
+	for _, snapshot := range []struct {
+		index, tags      int
+		typeName, status string
+	}{
+		{1, 2, "Fact", "draft"},
+		{3, 1, "Decision", "deprecated"},
+	} {
+		result := responses[snapshot.index].Result.(map[string]any)
+		concept, ok := result["structuredContent"].(map[string]any)
+		tags, tagsOK := concept["tags"].([]any)
+		if !ok || !tagsOK || concept["type"] != snapshot.typeName || concept["status"] != snapshot.status || len(tags) != snapshot.tags {
+			t.Fatalf("unexpected mutation snapshot: %+v", result)
+		}
+		if snapshot.index == 1 && tags[0] != "first" {
+			t.Fatalf("create did not trim tag: %v", tags)
+		}
+		if snapshot.index == 3 && tags[0] != "next" {
+			t.Fatalf("update did not replace tags: %v", tags)
+		}
+	}
+	b, err := LoadBundle(bundle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := b.Concepts["item"]
+	if c == nil || c.Type != "Decision" || c.Status != "deprecated" || c.Description != "Changed" || len(c.Tags) != 0 {
+		t.Fatalf("unexpected updated concept: %+v", c)
+	}
+	if b.Concepts["default-status"] == nil || b.Concepts["default-status"].Status != "stable" {
+		t.Fatalf("omitted status did not default to stable: %+v", b.Concepts["default-status"])
+	}
+	if b.Concepts["invalid"] != nil {
+		t.Fatal("invalid status created a concept")
+	}
+}
+
+func TestMCPMutationMetadataSchemas(t *testing.T) {
+	for _, tool := range GetMCPTools() {
+		name, _ := tool["name"].(string)
+		if name != "okf_create" && name != "okf_update" {
+			continue
+		}
+		schema := tool["inputSchema"].(map[string]any)
+		props := schema["properties"].(map[string]any)
+		for _, field := range []string{"type", "status", "tags"} {
+			if _, ok := props[field]; !ok {
+				t.Errorf("%s schema missing %s", name, field)
+			}
+		}
+		status := props["status"].(map[string]any)
+		if len(status["enum"].([]any)) != 3 {
+			t.Errorf("%s status enum missing values: %v", name, status["enum"])
+		}
+	}
+}
+
 func TestMCPOutputSchemasProperties(t *testing.T) {
 	byName := map[string]map[string]any{}
-	for _, tool := range getMCPTools() {
+	for _, tool := range GetMCPTools() {
 		name, _ := tool["name"].(string)
 		byName[name] = tool
 	}
@@ -361,6 +462,12 @@ func TestMCPToolCalls(t *testing.T) {
 		`{"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"okf_validate","arguments":{"strict":false}}}`,
 		// 7. Unknown tool
 		`{"jsonrpc":"2.0","id":17,"method":"tools/call","params":{"name":"non_existent_tool","arguments":{}}}`,
+		// 8. Search with filter
+		`{"jsonrpc":"2.0","id":18,"method":"tools/call","params":{"name":"okf_search","arguments":{"filter":"type=Decision"}}}`,
+		// 9. Search with stale_within
+		`{"jsonrpc":"2.0","id":19,"method":"tools/call","params":{"name":"okf_search","arguments":{"stale_within":"14d"}}}`,
+		// 10. Validate with stale_within
+		`{"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"okf_validate","arguments":{"strict":false,"stale_within":"14d"}}}`,
 	}
 
 	// Initialize basic index.md in tmpDir so LoadBundle works
@@ -895,7 +1002,7 @@ code_refs: ["pkg/**/*.go"]
 	cMap, _ := content[0].(map[string]any)
 	text, _ := cMap["text"].(string)
 
-	var results []okf.SearchResult
+	var results []SearchResult
 	if err := json.Unmarshal([]byte(text), &results); err != nil {
 		t.Fatalf("Failed to unmarshal search results: %v", err)
 	}
@@ -1105,8 +1212,8 @@ func TestMCPUpdateWithInvalidArguments(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(bundleDir, "log.md"), []byte("# Log\n"), 0o644)
 
 	// create initial concept
-	c := &okf.Concept{ID: "test/concept", Path: "test/concept.md", Type: "Fact", Title: "Original Title", Description: "Original Desc"}
-	_ = okf.SaveConcept(bundleDir, c, true, false, false, "test")
+	c := &Concept{ID: "test/concept", Path: "test/concept.md", Type: "Fact", Title: "Original Title", Description: "Original Desc"}
+	_ = SaveConcept(bundleDir, c, SaveOptions{IsNew: true, Actor: "test"})
 
 	hugeTitle := strings.Repeat("t", 1001)
 
@@ -1140,7 +1247,7 @@ func TestMCPUpdateWithInvalidArguments(t *testing.T) {
 	}
 
 	// Verify fields were cleared
-	b, _ := okf.LoadBundle(bundleDir)
+	b, _ := LoadBundle(bundleDir)
 	updated, _ := b.Concepts["test/concept"]
 	if updated.Description != "" {
 		t.Errorf("Expected Description to be empty, got: %s", updated.Description)
@@ -1214,5 +1321,197 @@ func TestMCPOversizedLineRejected(t *testing.T) {
 	resMap, ok := responses[1].Result.(map[string]any)
 	if !ok || resMap["tools"] == nil {
 		t.Errorf("Expected tools list in second response, got: %+v", responses[1].Result)
+	}
+}
+
+func TestMCPToolsList_MultiScopeSchemas(t *testing.T) {
+	var searchTool map[string]any
+	var showTool map[string]any
+
+	for _, tool := range GetMCPTools() {
+		switch tool["name"] {
+		case "okf_search":
+			searchTool = tool
+		case "okf_show":
+			showTool = tool
+		}
+	}
+
+	if searchTool == nil || showTool == nil {
+		t.Fatalf("Missing okf_search or okf_show in tool definitions")
+	}
+
+	// Verify okf_search inputSchema contains 'scope'
+	inSchema, _ := searchTool["inputSchema"].(map[string]any)
+	inProps, _ := inSchema["properties"].(map[string]any)
+	scopeProp, ok := inProps["scope"].(map[string]any)
+	if !ok {
+		t.Fatalf("okf_search inputSchema missing 'scope' property")
+	}
+	if scopeProp["type"] != "string" {
+		t.Errorf("expected scope property to be string, got: %v", scopeProp["type"])
+	}
+
+	// Verify okf_search outputSchema results item contains scope, priority, origin
+	outSchema, _ := searchTool["outputSchema"].(map[string]any)
+	outProps, _ := outSchema["properties"].(map[string]any)
+	resultsArr, _ := outProps["results"].(map[string]any)
+	items, _ := resultsArr["items"].(map[string]any)
+	itemProps, _ := items["properties"].(map[string]any)
+
+	for _, field := range []string{"scope", "priority", "origin"} {
+		if _, ok := itemProps[field]; !ok {
+			t.Errorf("okf_search outputSchema results item missing field: %q", field)
+		}
+	}
+
+	// Verify okf_show inputSchema concept_id description includes scoped references
+	showInSchema, _ := showTool["inputSchema"].(map[string]any)
+	showInProps, _ := showInSchema["properties"].(map[string]any)
+	cIDProp, ok := showInProps["concept_id"].(map[string]any)
+	if !ok {
+		t.Fatalf("okf_show inputSchema missing 'concept_id' property")
+	}
+	desc, _ := cIDProp["description"].(string)
+	if !strings.Contains(desc, "@") || !strings.Contains(desc, "user:") || !strings.Contains(desc, "system:") {
+		t.Errorf("expected okf_show concept_id description to mention scopes (@, user:, system:), got: %s", desc)
+	}
+}
+
+func TestMCP_SearchAndShow_MultiScopeLayering(t *testing.T) {
+	tempRoot := t.TempDir()
+
+	projDir := filepath.Join(tempRoot, "proj")
+	userDir := filepath.Join(tempRoot, "user")
+	sysDir := filepath.Join(tempRoot, "sys")
+
+	t.Setenv("OKF_USER_DIR", userDir)
+	t.Setenv("OKF_SYSTEM_DIR", sysDir)
+	// 未绑定显式根目录的独立 MCP 仍可使用上游多层读取。
+	t.Setenv("OKF_MCP_ROOT", "")
+
+	writeConcept := func(dir, relPath, title, body string) {
+		full := filepath.Join(dir, relPath)
+		if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		content := fmt.Sprintf("---\ntype: Decision\ntitle: %s\ndescription: %s description\nstatus: stable\n---\n# %s\n%s\n", title, title, title, body)
+		if err := os.WriteFile(full, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// System layer
+	writeConcept(sysDir, "index.md", "System Index", "System index")
+	writeConcept(sysDir, "decisions/system-only.md", "System Only Concept", "Only in system")
+	writeConcept(sysDir, "decisions/shared.md", "System Shared Concept", "Shared concept")
+
+	// User layer
+	writeConcept(userDir, "index.md", "User Index", "User index")
+	writeConcept(userDir, "decisions/user-only.md", "User Only Concept", "Only in user")
+	writeConcept(userDir, "decisions/shared.md", "User Shared Concept", "Shared concept")
+
+	// Vendor layer
+	vendorReact := filepath.Join(projDir, ".okf", "vendor", "react-19")
+	writeConcept(vendorReact, "index.md", "React Index", "React index")
+	writeConcept(vendorReact, "decisions/routing.md", "React Routing Concept", "Vendor routing")
+	writeConcept(vendorReact, "decisions/shared.md", "Vendor Shared Concept", "Shared concept")
+
+	// Project layer
+	projKnowledge := filepath.Join(projDir, "knowledge")
+	writeConcept(projKnowledge, "index.md", "Project Index", "Project index")
+	writeConcept(projKnowledge, "decisions/proj-only.md", "Project Only Concept", "Only in project")
+	writeConcept(projKnowledge, "decisions/shared.md", "Project Shared Concept", "Shared concept")
+
+	// 1. Search with scope: vendor
+	inputsVendor := []string{
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"okf_search","arguments":{"bundle":"` + jsonPath(projKnowledge) + `","query":"Concept","scope":"vendor"}}}`,
+	}
+	respsVendor := runMCPConversation(t, projKnowledge, inputsVendor)
+	if len(respsVendor) != 1 {
+		t.Fatalf("Expected 1 response for vendor search, got %d", len(respsVendor))
+	}
+	rMap, ok := respsVendor[0].Result.(map[string]any)
+	if !ok {
+		t.Fatalf("Unexpected result: %+v", respsVendor[0])
+	}
+	contentList, _ := rMap["content"].([]any)
+	cMap, _ := contentList[0].(map[string]any)
+	text, _ := cMap["text"].(string)
+
+	var vendorResults []SearchResult
+	if err := json.Unmarshal([]byte(text), &vendorResults); err != nil {
+		t.Fatalf("Failed to parse vendor search results: %v", err)
+	}
+	if len(vendorResults) != 2 {
+		t.Fatalf("Expected 2 vendor results, got %d", len(vendorResults))
+	}
+	for _, r := range vendorResults {
+		if r.Scope != ScopeVendor || r.Priority != PriorityVendor || !strings.HasPrefix(r.ConceptID, "@react-19/") {
+			t.Errorf("Unexpected vendor result: %+v", r)
+		}
+	}
+
+	// 2. Search with scope: all (verifies priority ranking and local shadowing of shared)
+	inputsAll := []string{
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"okf_search","arguments":{"bundle":"` + jsonPath(projKnowledge) + `","query":"shared","scope":"all"}}}`,
+	}
+	respsAll := runMCPConversation(t, projKnowledge, inputsAll)
+	if len(respsAll) != 1 {
+		t.Fatalf("Expected 1 response for all search, got %d", len(respsAll))
+	}
+	rMapAll, _ := respsAll[0].Result.(map[string]any)
+	contentListAll, _ := rMapAll["content"].([]any)
+	cMapAll, _ := contentListAll[0].(map[string]any)
+	textAll, _ := cMapAll["text"].(string)
+
+	var allResults []SearchResult
+	if err := json.Unmarshal([]byte(textAll), &allResults); err != nil {
+		t.Fatalf("Failed to parse all search results: %v", err)
+	}
+	if len(allResults) != 1 {
+		t.Fatalf("Expected exactly 1 result for 'shared' (project shadowing lower layers), got %d", len(allResults))
+	}
+	if allResults[0].Scope != ScopeProject || allResults[0].Priority != PriorityProject || allResults[0].Title != "Project Shared Concept" {
+		t.Errorf("Expected project shared concept to shadow lower layers, got: %+v", allResults[0])
+	}
+
+	// 3. Show concepts across all scopes
+	showInputs := []string{
+		`{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"okf_show","arguments":{"bundle":"` + jsonPath(projKnowledge) + `","concept_id":"decisions/proj-only"}}}`,
+		`{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"okf_show","arguments":{"bundle":"` + jsonPath(projKnowledge) + `","concept_id":"@react-19/decisions/routing"}}}`,
+		`{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"okf_show","arguments":{"bundle":"` + jsonPath(projKnowledge) + `","concept_id":"user:decisions/user-only"}}}`,
+		`{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"okf_show","arguments":{"bundle":"` + jsonPath(projKnowledge) + `","concept_id":"okf://system/decisions/system-only"}}}`,
+		// Security: traversal rejection in scoped ref
+		`{"jsonrpc":"2.0","id":14,"method":"tools/call","params":{"name":"okf_show","arguments":{"bundle":"` + jsonPath(projKnowledge) + `","concept_id":"@react-19/../../etc/passwd"}}}`,
+	}
+	showResps := runMCPConversation(t, projKnowledge, showInputs)
+	if len(showResps) != 5 {
+		t.Fatalf("Expected 5 responses for show, got %d", len(showResps))
+	}
+
+	expectTitles := []string{
+		"Project Only Concept",
+		"React Routing Concept",
+		"User Only Concept",
+		"System Only Concept",
+	}
+	for i, expTitle := range expectTitles {
+		respMap, ok := showResps[i].Result.(map[string]any)
+		if !ok || respMap["isError"] == true {
+			t.Fatalf("Show call %d failed: %+v", i+1, showResps[i])
+		}
+		cList, _ := respMap["content"].([]any)
+		cm, _ := cList[0].(map[string]any)
+		txt, _ := cm["text"].(string)
+		if !strings.Contains(txt, expTitle) {
+			t.Errorf("Expected title %q in response %d, got: %s", expTitle, i+1, txt)
+		}
+	}
+
+	// 5th response must be error due to traversal
+	respErrMap, _ := showResps[4].Result.(map[string]any)
+	if respErrMap["isError"] != true {
+		t.Errorf("Expected traversal show to return isError: true, got: %+v", showResps[4])
 	}
 }

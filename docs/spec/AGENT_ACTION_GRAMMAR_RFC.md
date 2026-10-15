@@ -316,7 +316,7 @@ Static analyzers, IDE plugins, and agent harnesses implementing AAG conformance 
 2. **`AAG-002` (ExplicitModal):** Every rule statement must begin with an RFC 2119 imperative verb.
 3. **`AAG-003` (ToolSignature):** Tool calls inside action blocks must match valid identifier syntax `name(arg=val)`.
 4. **`AAG-004` (UnreachableGuard):** Guard conditions with conflicting boolean predicates must trigger a static analysis error.
-5. **`AAG-005` (TokenBudget):** Canonical `AGENTS.md` working memory blocks must strictly remain within the **150 token budget**.
+5. **`AAG-005` (TokenBudget):** Canonical `AGENTS.md` working memory blocks must strictly remain within the **400 token budget** (`okf agents lint --budget`, default 400). The budget applies to the managed block between `<!-- BEGIN OKF AGENT MEMORY -->` and `<!-- END OKF AGENT MEMORY -->` (the whole file if no markers exist). Content outside the block is reported as total file tokens but is not gated.
 
 ---
 

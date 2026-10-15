@@ -43,7 +43,7 @@ type BrokenLink struct {
 // ensureWithinRoot verifies that targetPath (resolving all symlinks) stays strictly
 // within the canonical root directory. It returns the resolved absolute path or an error.
 func ensureWithinRoot(rootDir, targetPath string) (string, error) {
-	realRoot, err := filepath.EvalSymlinks(rootDir)
+	realRoot, err := resolveExistingPath(rootDir)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve bundle root: %w", err)
 	}
@@ -80,7 +80,7 @@ func ensureWithinRoot(rootDir, targetPath string) (string, error) {
 		curr = parent
 	}
 
-	realCurr, err := filepath.EvalSymlinks(curr)
+	realCurr, err := resolveExistingPath(curr)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve path %q: %w", curr, err)
 	}
@@ -102,36 +102,77 @@ func ensureWithinRoot(rootDir, targetPath string) (string, error) {
 }
 
 // LoadBundle loads all concepts, indexes, and logs from a bundle directory and builds the relationship graph.
+// A bundle root that is a symlink must resolve to a location inside the directory containing the link.
 func LoadBundle(root string) (*Bundle, error) {
-	realRoot, err := filepath.EvalSymlinks(root)
+	return loadBundle(root, false)
+}
+
+// loadTrustedBundle loads a bundle whose root the user configured explicitly (user and system scope).
+// Such a root may be a symlink to any location; symlinks inside the bundle remain confined to it.
+func loadTrustedBundle(root string) (*Bundle, error) {
+	return loadBundle(root, true)
+}
+
+// resolveBundleRoot returns the canonical directory to walk and the root path to report for the bundle at root.
+func resolveBundleRoot(root string, trustedRoot bool) (walkRoot, bundlePath string, err error) {
+	realRoot, err := resolveExistingPath(root)
 	if err != nil {
-		return nil, fmt.Errorf("bundle directory does not exist: %w", err)
+		return "", "", fmt.Errorf("bundle directory does not exist: %w", err)
 	}
 	realRoot, err = filepath.Abs(realRoot)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get absolute path of bundle root: %w", err)
+		return "", "", fmt.Errorf("failed to get absolute path of bundle root: %w", err)
+	}
+
+	if !trustedRoot {
+		if err := ensureRootWithinParent(root, realRoot); err != nil {
+			return "", "", err
+		}
 	}
 
 	info, err := os.Stat(realRoot)
 	if err != nil {
-		return nil, fmt.Errorf("bundle directory does not exist: %w", err)
+		return "", "", fmt.Errorf("bundle directory does not exist: %w", err)
 	}
 	if !info.IsDir() {
-		return nil, fmt.Errorf("path is not a directory: %s", root)
+		return "", "", fmt.Errorf("path is not a directory: %s", root)
 	}
 
 	// If root itself does not contain index.md, but contains a knowledge/ subdirectory,
 	// resolve to the nested knowledge/ bundle directory (e.g. project root with DMAA layout).
-	rootIndex := filepath.Join(realRoot, "index.md")
-	if _, err := os.Stat(rootIndex); os.IsNotExist(err) {
-		kDir := filepath.Join(realRoot, "knowledge")
-		if kInfo, kErr := os.Stat(kDir); kErr == nil && kInfo.IsDir() {
-			root = filepath.Join(root, "knowledge")
-		}
+	if _, err := os.Stat(filepath.Join(realRoot, "index.md")); !os.IsNotExist(err) {
+		return realRoot, root, nil
+	}
+	if kInfo, kErr := os.Stat(filepath.Join(realRoot, "knowledge")); kErr != nil || !kInfo.IsDir() {
+		return realRoot, root, nil
+	}
+	knowledgeRoot, err := ensureWithinRoot(realRoot, "knowledge")
+	if err != nil {
+		return "", "", err
+	}
+	return knowledgeRoot, filepath.Join(root, "knowledge"), nil
+}
+
+// ensureRootWithinParent rejects a bundle root whose symlink target lies outside the directory containing the link.
+func ensureRootWithinParent(root, realRoot string) error {
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path of bundle root: %w", err)
+	}
+	if _, err := ensureWithinRoot(filepath.Dir(absRoot), realRoot); err != nil {
+		return fmt.Errorf("bundle root %q resolves outside its parent directory: %w", root, err)
+	}
+	return nil
+}
+
+func loadBundle(root string, trustedRoot bool) (*Bundle, error) {
+	walkRoot, bundlePath, err := resolveBundleRoot(root, trustedRoot)
+	if err != nil {
+		return nil, err
 	}
 
 	b := &Bundle{
-		RootPath:     root,
+		RootPath:     bundlePath,
 		Concepts:     make(map[string]*Concept),
 		Indexes:      make(map[string]string),
 		Graph:        make(map[string][]string),
@@ -139,15 +180,15 @@ func LoadBundle(root string) (*Bundle, error) {
 	}
 
 	// 1. Walk directory and collect files
-	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
+	err = filepath.WalkDir(walkRoot, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
 		if d.IsDir() {
-			if path == root {
+			if path == walkRoot {
 				return nil
 			}
-			rel, err := filepath.Rel(root, path)
+			rel, err := filepath.Rel(walkRoot, path)
 			if err == nil && (rel == "." || rel == "") {
 				return nil
 			}
@@ -163,7 +204,7 @@ func LoadBundle(root string) (*Bundle, error) {
 			return nil
 		}
 
-		rel, err := filepath.Rel(root, path)
+		rel, err := filepath.Rel(walkRoot, path)
 		if err != nil {
 			return err
 		}
@@ -176,7 +217,7 @@ func LoadBundle(root string) (*Bundle, error) {
 
 		// Security: prevent symlink following outside bundle directory
 		if d.Type()&fs.ModeSymlink != 0 {
-			realTarget, err := ensureWithinRoot(root, path)
+			realTarget, err := ensureWithinRoot(walkRoot, path)
 			if err != nil {
 				return err
 			}
@@ -289,8 +330,9 @@ func (b *Bundle) buildGraph() {
 
 		for _, match := range matches {
 			href := match[1]
-			if strings.Contains(href, "://") {
-				continue // External URL
+			if IsExternalLink(href) {
+				linkedNodes[id] = true // Outbound external reference prevents false orphan flag
+				continue               // External URL or Qualified Scope URI: hermetic CI ignores remote target
 			}
 
 			targetID := b.ResolveLink(concept.Path, href)
@@ -330,8 +372,8 @@ func (b *Bundle) buildGraph() {
 
 		for _, match := range matches {
 			href := match[1]
-			if strings.Contains(href, "://") {
-				continue // External URL
+			if IsExternalLink(href) {
+				continue // External URL or Qualified Scope URI: hermetic CI ignores remote target
 			}
 
 			targetID := b.ResolveLink(idxPath, href)

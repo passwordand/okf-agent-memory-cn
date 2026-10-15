@@ -266,6 +266,128 @@ func TestSearchTreatsSingleRuneTermsConsistently(t *testing.T) {
 	}
 }
 
+func TestSearch_DFTFAsymmetryAndAcronymSuppression(t *testing.T) {
+	b := &okf.Bundle{
+		Concepts: map[string]*okf.Concept{
+			"pipeline": {
+				ID:          "pipeline",
+				Title:       "CI Pipeline Setup",
+				Description: "Continuous integration automation.",
+			},
+			"decisions/1": {
+				ID:          "decisions/1",
+				Title:       "Architecture Decision Record",
+				Description: "Specific guidelines and considerations.",
+				Body:        "Requires careful evaluation of choices.",
+			},
+			"decisions/2": {
+				ID:          "decisions/2",
+				Title:       "Security Identification",
+				Description: "Participant identification protocol.",
+				Body:        "Validates identity and credentials.",
+			},
+		},
+		Graph:        map[string][]string{},
+		InboundGraph: map[string][]string{},
+	}
+
+	// Substring "ci" appears inside "decision" (decisions/1) and "participant" (decisions/2),
+	// but only "pipeline" has the exact token "ci".
+	results := b.Search("ci", 5)
+	if len(results) != 1 {
+		t.Fatalf("Search(\"ci\") expected exactly 1 result, got %d: %#v", len(results), results)
+	}
+	if results[0].ConceptID != "pipeline" {
+		t.Fatalf("Search(\"ci\") top result = %s, want pipeline", results[0].ConceptID)
+	}
+	// Verify score is not collapsed by false DF matches
+	if results[0].Score < 1.0 {
+		t.Fatalf("Search(\"ci\") score collapsed unexpectedly: %f", results[0].Score)
+	}
+}
+
+func TestSearch_ShortStemPrefixMatchingRules(t *testing.T) {
+	b := &okf.Bundle{
+		Concepts: map[string]*okf.Concept{
+			"logging": {
+				ID:          "logging",
+				Title:       "Audit Log Service",
+				Description: "Structured logging framework.",
+			},
+			"auth": {
+				ID:          "auth",
+				Title:       "User Login Flow",
+				Description: "Authentication and authorization logic.",
+			},
+			"discovery": {
+				ID:          "discovery",
+				Title:       "Searching Algorithms",
+				Description: "Vector and lexical search approaches.",
+			},
+		},
+		Graph:        map[string][]string{},
+		InboundGraph: map[string][]string{},
+	}
+
+	// "log" has 3 characters (< 4 runes): must strictly match "log", not prefix-match "login"
+	logResults := b.Search("log", 5)
+	for _, r := range logResults {
+		if r.ConceptID == "auth" {
+			t.Fatalf("Search(\"log\") should not match 'auth' via 'login': %#v", r)
+		}
+	}
+	if len(logResults) == 0 || logResults[0].ConceptID != "logging" {
+		t.Fatalf("Search(\"log\") expected top result 'logging', got: %#v", logResults)
+	}
+
+	// "search" has 6 characters (>= 4 runes): allows prefix matching on "searching"
+	searchResults := b.Search("search", 5)
+	if len(searchResults) == 0 || searchResults[0].ConceptID != "discovery" {
+		t.Fatalf("Search(\"search\") expected prefix match on 'discovery', got: %#v", searchResults)
+	}
+}
+
+func TestSearch_MetadataTFCapsAgainstKeywordStuffing(t *testing.T) {
+	b := &okf.Bundle{
+		Concepts: map[string]*okf.Concept{
+			"stuffed": {
+				ID:          "stuffed",
+				Title:       "auth auth auth auth auth auth auth auth auth",
+				Description: "auth auth auth auth auth auth auth auth auth",
+			},
+			"normal": {
+				ID:          "normal",
+				Title:       "auth",
+				Description: "auth",
+			},
+		},
+		Graph:        map[string][]string{},
+		InboundGraph: map[string][]string{},
+	}
+
+	stuffedResults := b.Search("auth", 5)
+	if len(stuffedResults) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(stuffedResults))
+	}
+
+	// Title tf is capped at 2.0 (2 * 4.0 = 8.0) and description at 3.0 (3 * 2.5 = 7.5).
+	// Without caps, stuffed title alone would have been 9 * 4.0 = 36.0!
+	var stuffedScore, normalScore float64
+	for _, r := range stuffedResults {
+		switch r.ConceptID {
+		case "stuffed":
+			stuffedScore = r.Score
+		case "normal":
+			normalScore = r.Score
+		}
+	}
+
+	// Ratio of stuffed to normal should be bounded (<= 2.5x), not 9x.
+	if stuffedScore > normalScore*2.5 {
+		t.Fatalf("keyword stuffing was not properly capped: stuffed=%f, normal=%f", stuffedScore, normalScore)
+	}
+}
+
 func TestMutateAndAutoBookkeeping(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -281,7 +403,7 @@ func TestMutateAndAutoBookkeeping(t *testing.T) {
 		Body:        "# Fact\n\nTesting fact content.",
 	}
 
-	if err := okf.SaveConcept(tmpDir, c, true, true, true, "agent/unit-test"); err != nil {
+	if err := okf.SaveConcept(tmpDir, c, okf.SaveOptions{IsNew: true, AutoLog: true, AutoIndex: true, Actor: "agent/unit-test"}); err != nil {
 		t.Fatalf("SaveConcept failed: %v", err)
 	}
 
@@ -332,10 +454,10 @@ func TestRelateConcepts(t *testing.T) {
 		Body:        "# API Gateway\n\nGateway details.",
 	}
 
-	if err := okf.SaveConcept(tmpDir, c1, true, true, true, "agent/test"); err != nil {
+	if err := okf.SaveConcept(tmpDir, c1, okf.SaveOptions{IsNew: true, AutoLog: true, AutoIndex: true, Actor: "agent/test"}); err != nil {
 		t.Fatalf("Save c1 failed: %v", err)
 	}
-	if err := okf.SaveConcept(tmpDir, c2, true, true, true, "agent/test"); err != nil {
+	if err := okf.SaveConcept(tmpDir, c2, okf.SaveOptions{IsNew: true, AutoLog: true, AutoIndex: true, Actor: "agent/test"}); err != nil {
 		t.Fatalf("Save c2 failed: %v", err)
 	}
 
@@ -387,7 +509,7 @@ func TestRelateConcepts(t *testing.T) {
 	}
 
 	c1.Title = "OAuth 2.0 Flow"
-	if err := okf.SaveConcept(tmpDir, c1, false, false, false, "agent/test"); err != nil {
+	if err := okf.SaveConcept(tmpDir, c1, okf.SaveOptions{IsNew: false, Actor: "agent/test"}); err != nil {
 		t.Fatalf("SaveConcept after title change failed: %v", err)
 	}
 	if err := okf.RelateConcepts(tmpDir, "services/gateway", "auth/oauth", "verifies incoming tokens", "agent/test"); err != nil {
@@ -415,10 +537,10 @@ func TestRelateConceptsUsesCanonicalRelatedSection(t *testing.T) {
 		Title: "Source",
 		Body:  "# Source\n\n# Related Work\n\nBackground research.",
 	}
-	if err := okf.SaveConcept(tmpDir, target, true, false, false, "agent/test"); err != nil {
+	if err := okf.SaveConcept(tmpDir, target, okf.SaveOptions{IsNew: true, Actor: "agent/test"}); err != nil {
 		t.Fatalf("Save target failed: %v", err)
 	}
-	if err := okf.SaveConcept(tmpDir, source, true, false, false, "agent/test"); err != nil {
+	if err := okf.SaveConcept(tmpDir, source, okf.SaveOptions{IsNew: true, Actor: "agent/test"}); err != nil {
 		t.Fatalf("Save source failed: %v", err)
 	}
 
@@ -437,7 +559,7 @@ func TestRelateConceptsUsesCanonicalRelatedSection(t *testing.T) {
 	}
 
 	source.Body = "# Source\n\n# Related Concepts\n\n- Existing relation\n\n# Notes\n\nKeep this last."
-	if err := okf.SaveConcept(tmpDir, source, false, false, false, "agent/test"); err != nil {
+	if err := okf.SaveConcept(tmpDir, source, okf.SaveOptions{IsNew: false, Actor: "agent/test"}); err != nil {
 		t.Fatalf("Reset source failed: %v", err)
 	}
 	if err := okf.RelateConcepts(tmpDir, "source", "target", "supports", "agent/test"); err != nil {
@@ -453,7 +575,7 @@ func TestRelateConceptsUsesCanonicalRelatedSection(t *testing.T) {
 	}
 
 	source.Body = "# Source\n\n# Related Concepts\n\n```markdown\n- [Target](target.md): illustrated only\n```"
-	if err := okf.SaveConcept(tmpDir, source, false, false, false, "agent/test"); err != nil {
+	if err := okf.SaveConcept(tmpDir, source, okf.SaveOptions{IsNew: false, Actor: "agent/test"}); err != nil {
 		t.Fatalf("Reset source with fenced example failed: %v", err)
 	}
 	for i := 0; i < 2; i++ {

@@ -183,7 +183,7 @@ jobs:
           body_path: ${{ steps.release_notes.outputs.BODY_PATH }}
 
       - name: Auto-update Homebrew Tap
-        if: env.HOMEBREW_TAP_TOKEN != ''
+        if: github.repository == 'okf-memory/okf-agent-memory' && env.HOMEBREW_TAP_TOKEN != ''
         run: |
           if [ -z "${HOMEBREW_TAP_TOKEN:-}" ]; then
             echo "HOMEBREW_TAP_TOKEN is not set, skipping Homebrew tap update."
@@ -206,7 +206,7 @@ jobs:
           fi
 
       - name: Auto-update Documentation Website
-        if: env.WEBSITE_UPDATE_TOKEN != ''
+        if: github.repository == 'okf-memory/okf-agent-memory' && env.WEBSITE_UPDATE_TOKEN != ''
         run: |
           if [ -z "${WEBSITE_UPDATE_TOKEN:-}" ]; then
             echo "WEBSITE_UPDATE_TOKEN is not set, skipping website update."

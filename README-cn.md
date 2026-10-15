@@ -1,6 +1,6 @@
 # OKF 中文检索改造版
 
-这是 [OKF Agent Memory](https://github.com/okf-memory/okf-agent-memory) v0.4.3 的中文检索改造版，使用 `go-ego/gse` 处理中文和中英文混合文本。它保持 OKF 的 Markdown 数据格式、CLI 和 MCP 接口兼容性。
+这是 [OKF Agent Memory](https://github.com/okf-memory/okf-agent-memory) v0.6.1 的中文检索改造版，使用 `go-ego/gse` 处理中文和中英文混合文本。它保持 OKF 的 Markdown 数据格式、CLI 和 MCP 接口兼容性。
 
 ## 源码
 
@@ -9,7 +9,7 @@
 
 ## 改动内容
 
-- 基于上游 v0.4.3，包含加密 vault、Hub 同步、MCP 结构化返回和安全修复；
+- 基于上游 v0.6.1，包含元数据编辑与过滤、知识包、多层检索及搜索 / 同步修复，绑定根目录的 MCP 保持双库隔离；
 - 使用 gse 搜索模式处理中文分词；
 - 保留英文、数字和概念 ID 检索；
 - 分词器只初始化一次，避免重复加载词典；
@@ -22,7 +22,7 @@
 
 ## 验证状态
 
-本源码已合入上游 v0.4.3，同时保留 gse 中文检索、显式 `okf_init()` 和双库 wrapper。七个 MCP 工具成功调用均返回与 object 类型 `outputSchema` 对应的 `structuredContent`。
+本源码已合入上游 v0.6.1，同时保留 gse 中文检索、显式 `okf_init()` 和双库 wrapper。七个 MCP 工具成功调用均返回与 object 类型 `outputSchema` 对应的 `structuredContent`。
 
 ## 公开文档
 

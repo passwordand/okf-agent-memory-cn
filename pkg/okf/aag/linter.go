@@ -44,6 +44,7 @@ func LintContent(filename string, content []byte, opts LinterOptions) *LintResul
 
 	res.TokenStats = TokenStats{
 		EstimatedTokens: aagBlockTokens,
+		TotalTokens:     totalTokens,
 		BudgetLimit:     opts.BudgetLimit,
 		BudgetExceeded:  aagBlockTokens > opts.BudgetLimit,
 	}

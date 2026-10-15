@@ -1,9 +1,24 @@
 ---
 type: Status
 title: 当前项目进度
-description: v0.4.3-cn.1 已发布；上游 v0.4.3 与中文检索、显式初始化及双库 wrapper 完成集成，本机四套 Agent 已切换到新版。
-generated: { by: agent/mcp, at: "2026-09-27T16:00:05Z" }
+description: v0.6.1-cn.1 正式适配完成，Windows 核心兼容测试通过，正在发布并准备本机替换。
+generated: { by: agent/cli, at: "2026-10-15T03:18:49Z" }
 ---
+
+# 当前项目进度
+
+## 2026-10-15
+
+v0.6.1-cn.1 正式适配完成，进入发布及本机安装阶段。用户明确 Windows 核心使用为验收范围，沿用隔离测试结果，仅对正式构建和安装入口做必要验证。GitHub 发布和本机切换完成后再更新部署结果。
+
+
+# 2026-10-14 隔离升级测试
+
+现用版本仍为 v0.4.3-cn.1。独立工作树 codex/okf-v061-isolation 已构建 v0.6.1-cn.1-isolation，并完成中文、显式初始化、双库和 junction 边界测试；当前没有切换、提交或发布。
+
+Go 测试 311 项通过，17 项条件跳过，2 项权限受限测试显式排除；wrapper 6 项、真实 MCP 集成 13 项、go vet 和严格数据校验通过。完整符号链接检查、race 与真实远端联调尚未完成，详细结论见 docs/project/UPGRADE_V061_ISOLATION_REPORT.md。
+
+以下保留现用版本发布记录：
 
 # 当前项目进度
 
@@ -21,3 +36,4 @@ generated: { by: agent/mcp, at: "2026-09-27T16:00:05Z" }
 - [显式初始化缺失的项目知识库](../architecture/explicit-bundle-initialization.md): 显式初始化架构决定。
 - [上游 v0.4.3 与中文检索版兼容性审查](../research/upstream-v0-4-3-compatibility.md): 升级前证据。
 - [上游 v0.4.3 与中文记忆功能的集成决定](../architecture/upstream-v0-4-3-integration.md): 本次集成决定。
+- [上游 v0.6.1 隔离升级与双库兼容方案](../architecture/upstream-v0-6-1-isolation.md): 本次隔离升级方案与测试边界
