@@ -31,7 +31,7 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Build and test Windows
         run: |
-          go build -o bin/okf.exe ./cmd/okf
+          go build -ldflags "-X main.Version=ci" -o bin/okf.exe ./cmd/okf
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           # 两项测试需要文件符号链接权限；junction 边界由真实 MCP 集成测试覆盖。
           go test ./... -skip '^(TestCLIAgentsLint|TestCreateAndCheckToolSymlinks)$'
@@ -44,7 +44,7 @@ jobs:
         run: |
           gh release download v0.4.3-cn.1 --repo $env:GITHUB_REPOSITORY --pattern okf-windows-amd64.exe --dir dist/legacy
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          node scripts/test-upgrade-isolation.cjs bin/okf.exe dist/legacy/okf-windows-amd64.exe dist/upgrade-compatibility.json dev
+          node scripts/test-upgrade-isolation.cjs bin/okf.exe dist/legacy/okf-windows-amd64.exe dist/upgrade-compatibility.json ci
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Validate knowledge
         run: |
