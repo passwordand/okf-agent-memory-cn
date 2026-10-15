@@ -10,7 +10,7 @@ const legacy = path.resolve(process.argv[3]);
 const output = path.resolve(process.argv[4]);
 const expectedVersion = process.argv[5] || 'v0.6.1-cn.1';
 const workspace = path.resolve(__dirname, '..');
-const fixture = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'okf-v061-isolation-'));
+const fixture = fs.mkdtempSync(path.join(fs.realpathSync.native(os.tmpdir()), 'okf-v061-isolation-'));
 const home = path.join(fixture, 'home');
 const project = path.join(fixture, 'project');
 const globalBundle = path.join(home, '.config', 'agent-memory', 'knowledge');
@@ -163,7 +163,7 @@ try {
   console.log(JSON.stringify({ passed: report.passed, checks: report.checks.length, output }));
   // 仅清理本次新建且已校验的临时目录。
   const resolved = fs.realpathSync(fixture);
-  if (path.dirname(resolved) === fs.realpathSync(os.tmpdir()) && path.basename(resolved).startsWith('okf-v061-isolation-')) {
+  if (path.dirname(resolved) === fs.realpathSync.native(os.tmpdir()) && path.basename(resolved).startsWith('okf-v061-isolation-')) {
     fs.rmSync(resolved, { recursive: true, force: true });
   }
 }

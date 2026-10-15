@@ -6,10 +6,10 @@ const path = require("node:path");
 const { resolveProject } = require("./mem-mcp.js");
 
 function tempRoot(t) {
-  const tempDir = fs.realpathSync(os.tmpdir());
+  const tempDir = fs.realpathSync.native(os.tmpdir());
   const root = fs.mkdtempSync(path.join(tempDir, "okf-wrapper-"));
   t.after(() => {
-    const target = fs.realpathSync(root);
+    const target = fs.realpathSync.native(root);
     if (path.dirname(target) !== tempDir || !path.basename(target).startsWith("okf-wrapper-")) {
       throw new Error(`unsafe test cleanup path: ${target}`);
     }
