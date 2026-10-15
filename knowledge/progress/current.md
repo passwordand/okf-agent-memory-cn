@@ -1,15 +1,21 @@
 ---
 type: Status
 title: 当前项目进度
-description: v0.6.1-cn.1 正式适配完成，Windows 核心兼容测试通过，正在发布并准备本机替换。
-generated: { by: agent/cli, at: "2026-10-15T03:18:49Z" }
+description: v0.6.1-cn.1 已发布并替换本机共享 MCP 程序；Windows CI 与真实双库验证通过，原目录结构保留，旧连接需重连。
+generated: { by: agent/mcp, at: "2026-10-15T03:28:16Z" }
 ---
 
 # 当前项目进度
 
 ## 2026-10-15
 
-v0.6.1-cn.1 正式适配完成，进入发布及本机安装阶段。用户明确 Windows 核心使用为验收范围，沿用隔离测试结果，仅对正式构建和安装入口做必要验证。GitHub 发布和本机切换完成后再更新部署结果。
+`v0.6.1-cn.1` 已发布并完成本机替换。发布标签提交为 `1137e4b`，GitHub 主分支已更新。发布地址：https://github.com/passwordand/okf-agent-memory-cn/releases/tag/v0.6.1-cn.1。
+
+Windows CI（38676115095）和 Release（38676115111）均成功。Windows Go 测试按已记录的两项文件符号链接权限限制排除；wrapper 6 项、真实 MCP 集成 13 项及项目 / 示例库严格校验通过。用户明确仅关注 Windows 核心使用，本次不追加非 Windows 实机、race 或真实 Hub / Registry 联调。
+
+本机共享 wrapper 已指向 `bin/okf-v0.6.1-cn.1.exe`，安装的文件直接来自 GitHub Release，SHA-256 为 `ef17a3ab95749dfd70b1f73568b429f74f1afb64c04b6f27040c25732cf4cff8`。旧版程序及 wrapper 已备份；双 MCP 服务名、库目录及客户端入口保持原结构。安装后新建项目 / 全局 MCP 会话均返回新版、7 个工具，读取正常且拒绝跨层请求。运行中的旧客户端需要重新连接 MCP。
+
+项目库严格校验通过（23 概念，0 错误、0 警告）。全局库读写结构兼容，已有 3 条孤立概念导致连通性 gate 不通过，新旧版本结果一致，本次未改动这些无关内容。
 
 
 # 2026-10-14 隔离升级测试
